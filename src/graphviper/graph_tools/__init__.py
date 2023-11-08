@@ -1,3 +1,3 @@
-from ._utils import _make_time_coord, _make_frequency_coord, _make_parallel_coord
-from ._map import _map
-from ._reduce import _reduce
+from .utils import make_time_coord, make_frequency_coord, make_parallel_coord
+from .map import map
+from .reduce import reduce

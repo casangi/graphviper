@@ -10,7 +10,7 @@ from astroviper._utils._logger import _get_logger
 import ipaddress
 
 
-def get_unique_resource_ip(workers_info):
+def _get_unique_resource_ip(workers_info):
     nodes = []
     for worker, wi in workers_info.items():
         worker_ip = worker[worker.rfind("/") + 1 : worker.rfind(":")]
@@ -132,7 +132,7 @@ def _generate_chunk_slices(parallel_coords, input_data_name):
     return chunk_slice_dict
 
 
-def _map(
+def map(
     input_data_name,
     input_data_type,
     parallel_coords,
@@ -178,7 +178,7 @@ def _map(
 
     if local_cache:
         workers_info = client.scheduler_info()["workers"]
-        nodes_ip_list = get_unique_resource_ip(workers_info)
+        nodes_ip_list = _get_unique_resource_ip(workers_info)
         n_nodes = len(nodes_ip_list)
 
         chunks_per_node = math.floor(n_chunks / n_nodes + 0.5)

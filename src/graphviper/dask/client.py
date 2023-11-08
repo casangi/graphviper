@@ -5,16 +5,15 @@ import os
 import logging
 import graphviper
 import distributed
-from graphviper._utils._parm_utils._check_logger_parms import (
-    _check_logger_parms,
-    _check_worker_logger_parms,
+from graphviper.parameter_checking.check_logger_parms import (
+    check_logger_parms,
+    check_worker_logger_parms,
 )
-from graphviper._utils._logger import (
-    _setup_logger,
-    _get_logger,
-    _setup_logger,
+from graphviper.logger import (
+    setup_logger,
+    get_logger
 )
-from graphviper._concurrency._dask._worker import (
+from graphviper.dask._worker import (
     _worker,
 )  # _worker_logger_plugin
 
@@ -41,12 +40,12 @@ def local_client(
     _log_parms = copy.deepcopy(log_parms)
     _worker_log_parms = copy.deepcopy(worker_log_parms)
 
-    assert _check_logger_parms(
+    assert check_logger_parms(
         _log_parms
     ), "######### ERROR: initialize_processing log_parms checking failed."
 
     if _worker_log_parms is not None:
-        assert _check_worker_logger_parms(
+        assert check_worker_logger_parms(
             _worker_log_parms
         ), "######### ERROR: initialize_processing log_parms checking failed."
 
@@ -57,8 +56,8 @@ def local_client(
         local_cache = False
 
     # print(_log_parms)
-    _setup_logger(**_log_parms)
-    logger = _get_logger()
+    setup_logger(**_log_parms)
+    logger = get_logger()
 
     _set_up_dask(dask_local_dir)
 
@@ -169,10 +168,10 @@ def slurm_cluster_client(
         local_cache = False
 
     # Viper logger for code that is not part of the Dask graph. The worker logger is setup in the _viper_worker plugin.
-    from viper._utils._logger import _setup_logger
+    from viper._utils._logger import setup_logger
 
-    _setup_logger(**_log_parms)
-    logger = _get_logger()
+    setup_logger(**_log_parms)
+    logger = get_logger()
 
     _set_up_dask(dask_local_dir)
 

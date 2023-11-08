@@ -21,7 +21,7 @@ def _single_node(graph, chunk_function, chunk_function_input_parms):
     return dask.delayed(chunk_function)(graph, chunk_function_input_parms)
 
 
-def _reduce(graph, chunk_function, chunk_function_input_parms, mode="tree"):
+def reduce(graph, chunk_function, chunk_function_input_parms, mode="tree"):
     if mode == "tree":
         graph_reduced = _tree_combine(
             graph[0], chunk_function, chunk_function_input_parms

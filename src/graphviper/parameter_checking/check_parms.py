@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def _check_parms(
+def check_parms(
     parm_dict,
     string_key,
     acceptable_data_types,
@@ -103,7 +103,7 @@ def _check_parms(
                     # print('1.*******')
                     # print(parm_dict[string_key], default_element, [type(default[default_element])], default[default_element])
                     if not (
-                        _check_parms(
+                        check_parms(
                             parm_dict[string_key],
                             default_element,
                             [type(default[default_element])],
@@ -292,7 +292,7 @@ def _check_sub_sel_parms(sel_parms, select_defaults):
     parms_passed = True
     for sel in select_defaults:
         if not (
-            _check_parms(
+            check_parms(
                 sel_parms,
                 sel,
                 [type(select_defaults[sel])],
@@ -312,12 +312,12 @@ def _check_sel_parms(sel_parms,select_defaults):
                 for sub_sel_def in select_defaults[sel_def]:
                         #print(sub_sel_def,select_defaults[sel_def])
                         #print(sel_parms[sel_def], sub_sel_def, select_defaults[sel_def][sub_sel_def])
-                        if not(_check_parms(sel_parms[sel_def], sub_sel_def, [str], default=select_defaults[sel_def][sub_sel_def])): parms_passed = False
+                        if not(check_parms(sel_parms[sel_def], sub_sel_def, [str], default=select_defaults[sel_def][sub_sel_def])): parms_passed = False
             else:
                 sel_parms[sel_def] = select_defaults[sel_def]
                 print ('Setting default', string_key, ' to ', parm_dict[string_key])
         else:
-            if not(_check_parms(sel_parms, sel_def, [str], default=select_defaults[sel_def])): parms_passed = False
+            if not(check_parms(sel_parms, sel_def, [str], default=select_defaults[sel_def])): parms_passed = False
     return parms_passed
 """
 

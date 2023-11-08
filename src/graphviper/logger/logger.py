@@ -11,7 +11,7 @@ from dask.distributed import WorkerPlugin
 import dask
 
 
-def _get_logger(name=logger_name):
+def get_logger(name=logger_name):
     """
     Will first try to get worker logger. If this fails graph construction logger is returned.
     """
@@ -29,7 +29,7 @@ def _get_logger(name=logger_name):
         return logging.getLogger()
 
 
-def _setup_logger(
+def setup_logger(
     log_to_term=False,
     log_to_file=True,
     log_file="viper_",
@@ -58,27 +58,7 @@ def _get_worker_logger_name(name=logger_name):
     worker_log_name = name + "_" + str(get_worker().id)
     return worker_log_name
 
-
-"""
-class _viper_worker_logger_plugin(WorkerPlugin):
-    def __init__(self,log_parms):
-        self.log_to_term=log_parms['log_to_term']
-        self.log_to_file=log_parms['log_to_file']
-        self.log_file=log_parms['log_file']
-        self.level=log_parms['log_level']
-        self.logger = None
-        print(self.log_to_term,self.log_to_file,self.log_file,self.log_level)
-        
-    def get_logger(self):
-        return self.logger
-        
-    def setup(self, worker: dask.distributed.Worker):
-        "Run when the plugin is attached to a worker. This happens when the plugin is registered and attached to existing workers, or when a worker is created after the plugin has been registered."
-        self.logger = _setup_viper_worker_logger(self.log_to_term,self.log_to_file,self.log_file,self.level)
-"""
-
-
-def _setup_worker_logger(log_to_term, log_to_file, log_file, log_level, worker_id):
+def setup_worker_logger(log_to_term, log_to_file, log_file, log_level, worker_id):
     # parallel_logger_name = _get_worker_logger_name()
     parallel_logger_name = logger_name + "_" + worker_id
 

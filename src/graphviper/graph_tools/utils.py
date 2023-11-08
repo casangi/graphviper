@@ -1,8 +1,7 @@
 import numpy as np
 import xarray as xr
 
-
-def _make_time_coord(
+def make_time_coord(
     time_start="2019-10-03T19:00:00.000",
     time_delta=3600,
     n_samples=10,
@@ -32,7 +31,7 @@ def _make_time_coord(
     }
 
 
-def _make_frequency_coord(
+def make_frequency_coord(
     freq_start=3 * 10**9,
     freq_delta=0.4 * 10**9,
     n_channels=50,
@@ -49,8 +48,23 @@ def _make_frequency_coord(
         },
     }
 
+def make_parallel_coord(coord, n_chunks=None):
+    if isinstance(coord, xr.core.dataarray.DataArray):
+        coord = coord.copy(deep=True).to_dict()
 
-def array_split(data, n_chunks):
+    n_samples = len(coord["data"])
+    parallel_coord = {}
+    parallel_coord["data"] = coord["data"]
+    parallel_coord["data_chunks"] = dict(
+        zip(np.arange(n_chunks), _array_split(coord["data"], n_chunks))
+    )
+    parallel_coord["dims"] = coord["dims"]
+    parallel_coord["attrs"] = coord["attrs"]
+    return parallel_coord
+
+
+
+def _array_split(data, n_chunks):
     chunk_size = int(np.ceil(len(data) / n_chunks))
 
     from itertools import islice
@@ -65,21 +79,3 @@ def array_split(data, n_chunks):
         result.append(np.array(chunk))
 
     return result
-
-
-def _make_parallel_coord(coord, n_chunks=None):
-    if isinstance(coord, xr.core.dataarray.DataArray):
-        coord = coord.copy(deep=True).to_dict()
-
-    n_samples = len(coord["data"])
-    parallel_coord = {}
-    parallel_coord["data"] = coord["data"]
-    #    parallel_coord["data_chunks"] = dict(
-    #        zip(np.arange(n_chunks), np.array_split(coord["data"], n_chunks))
-    #    )
-    parallel_coord["data_chunks"] = dict(
-        zip(np.arange(n_chunks), array_split(coord["data"], n_chunks))
-    )
-    parallel_coord["dims"] = coord["dims"]
-    parallel_coord["attrs"] = coord["attrs"]
-    return parallel_coord
