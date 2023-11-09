@@ -58,6 +58,7 @@ def _get_worker_logger_name(name=logger_name):
     worker_log_name = name + "_" + str(get_worker().id)
     return worker_log_name
 
+
 def setup_worker_logger(log_to_term, log_to_file, log_file, log_level, worker_id):
     # parallel_logger_name = _get_worker_logger_name()
     parallel_logger_name = logger_name + "_" + worker_id

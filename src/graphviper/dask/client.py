@@ -9,10 +9,7 @@ from graphviper.parameter_checking.check_logger_parms import (
     check_logger_parms,
     check_worker_logger_parms,
 )
-from graphviper.logger import (
-    setup_logger,
-    get_logger
-)
+from graphviper.logger import setup_logger, get_logger
 from graphviper.dask._worker import (
     _worker,
 )  # _worker_logger_plugin
@@ -60,7 +57,6 @@ def local_client(
     logger = get_logger()
 
     _set_up_dask(dask_local_dir)
-
 
     viper_path = graphviper.__path__[0]
     if local_cache or autorestrictor:

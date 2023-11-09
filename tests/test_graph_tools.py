@@ -16,8 +16,10 @@ def test_map_reduce():
         intents=["OBSERVE_TARGET#ON_SOURCE"],
         fields=fields,
     )
-    ms_xds = ps["Antennae_North.cal.lsrk.split_ddi_0_intent_OBSERVE_TARGET#ON_SOURCE_field_id_0"]
-    
+    ms_xds = ps[
+        "Antennae_North.cal.lsrk.split_ddi_0_intent_OBSERVE_TARGET#ON_SOURCE_field_id_0"
+    ]
+
     from graphviper.graph_tools.utils import make_parallel_coord
 
     parallel_coords = {}
@@ -52,23 +54,15 @@ def test_map_reduce():
     from graphviper.graph_tools import reduce
     import numpy as np
 
-
     def my_sum(graph_inputs, input_parms):
         return np.sum(graph_inputs) + input_parms["test_input"]
-
 
     input_parms = {}
     input_parms["test_input"] = 5
     graph_reduce = reduce(
         graph, my_sum, input_parms, mode="tree"
     )  # mode "tree","single_node"
-    
+
     print(dask.compute(graph_reduce))
-    print('*'*100)
+    print("*" * 100)
     assert dask.compute(graph_reduce)[0][0][0] == 559
-
-
-
-
-
-

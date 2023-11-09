@@ -1,6 +1,7 @@
 import numpy as np
 import xarray as xr
 
+
 def make_time_coord(
     time_start="2019-10-03T19:00:00.000",
     time_delta=3600,
@@ -48,6 +49,7 @@ def make_frequency_coord(
         },
     }
 
+
 def make_parallel_coord(coord, n_chunks=None):
     if isinstance(coord, xr.core.dataarray.DataArray):
         coord = coord.copy(deep=True).to_dict()
@@ -61,7 +63,6 @@ def make_parallel_coord(coord, n_chunks=None):
     parallel_coord["dims"] = coord["dims"]
     parallel_coord["attrs"] = coord["attrs"]
     return parallel_coord
-
 
 
 def _array_split(data, n_chunks):
