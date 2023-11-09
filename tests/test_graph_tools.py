@@ -2,9 +2,9 @@ def test_map_reduce():
     from xradio.data.datasets import download
     from graphviper.graph_tools import map
     import dask
-    download(file="Antennae_North.cal.lsrk.split.zarr", source="dropbox")
 
     ps_name = "Antennae_North.cal.lsrk.split.vis.zarr"
+    download(file=ps_name, source="dropbox")
 
     from xradio.vis.read_processing_set import read_processing_set
 
@@ -12,7 +12,7 @@ def test_map_reduce():
     intents = ["OBSERVE_TARGET#ON_SOURCE"]
     fields = None
     ps = read_processing_set(
-        ps_name="Antennae_North.cal.lsrk.split.vis.zarr",
+        ps_name=ps_name,
         intents=["OBSERVE_TARGET#ON_SOURCE"],
         fields=fields,
     )
@@ -36,7 +36,6 @@ def test_map_reduce():
 
     input_parms = {}
     input_parms["test_input"] = 42
-    ps_name = "Antennae_North.cal.lsrk.split.vis.zarr"
     sel_parms = {}
     sel_parms["fields"] = ["NGC4038 - Antennae North"]
     sel_parms["intents"] = ["OBSERVE_TARGET#ON_SOURCE"]
