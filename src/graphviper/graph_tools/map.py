@@ -6,7 +6,6 @@ import dask
 import math
 import os
 import datetime
-from astroviper._utils._logger import _get_logger
 import ipaddress
 
 
@@ -144,8 +143,6 @@ def map(
     """
     Builds a perfectly parallel graph where func_chunk node task is created for each chunk defined in parallel_coords. The data in the input_data_name is mapped to each parallel_coords chunk.
     """
-
-    logger = _get_logger()
 
     if input_data_type == "processing_set":
         input_data = read_processing_set(

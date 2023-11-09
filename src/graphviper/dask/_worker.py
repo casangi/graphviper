@@ -1,6 +1,6 @@
 import click
 
-from astroviper._utils._logger import _setup_worker_logger
+from graphviper._logger import _setup_worker_logger
 
 
 class _worker:
