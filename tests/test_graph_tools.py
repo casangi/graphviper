@@ -3,6 +3,9 @@ def test_map_reduce():
     from graphviper.graph_tools import map
     import dask
 
+    import dask
+    dask.config.set(scheduler="synchronous")
+
     ps_name = "Antennae_North.cal.lsrk.split.vis.zarr"
     download(file=ps_name, source="dropbox")
 
@@ -34,7 +37,15 @@ def test_map_reduce():
     )
 
     def my_func(input_parms):
-        return input_parms["test_input"]
+        from xradio.vis.load_processing_set import load_processing_set
+        ps = load_processing_set(
+                ps_name=input_parms["input_data_name"],
+                sel_parms=input_parms["data_sel"],
+            )
+        test_sum = 0
+        for ms_xds in ps.values():
+            test_sum = test_sum  + ms_xds.frequency[-1].data/(100*(input_parms['chunk_indx'][0]+input_parms['chunk_indx'][1]+1))
+        return test_sum #input_parms["test_input"]
 
     input_parms = {}
     input_parms["test_input"] = 42
@@ -63,6 +74,4 @@ def test_map_reduce():
         graph, my_sum, input_parms, mode="tree"
     )  # mode "tree","single_node"
 
-    print(dask.compute(graph_reduce))
-    print("*" * 100)
-    assert dask.compute(graph_reduce)[0][0][0] == 559
+    assert dask.compute(graph_reduce)[0][0][0] == 44544495255.635056
