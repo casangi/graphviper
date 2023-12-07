@@ -1,34 +1,28 @@
 from typing import Callable, Any
-from xradio.vis.read_processing_set import read_processing_set
-from xradio.image import read_image
+from xradio.vis._processing_set import processing_set
 import numpy as np
 import dask
 import math
 import os
 import datetime
-import itertools
-from scipy.interpolate import interp1d
-
+from typing import Dict, Union
+import copy
 
 def map(
-    input_data_store: str,
-    input_data_type: {"processing_set", "image"},
+    input_data: Union[Dict, processing_set],
     node_task_data_mapping: dict,
     node_task: Callable[..., Any],
     input_parms: dict,
-    ps_sel_parms: dict = {},
-    client = None,
+    in_memory_compute=False,
+    client=None,
     date_time: str = None
 ):
     """Builds a perfectly parallel graph where a node is created for each chunk defined in parallel_coords.
 
     Parameters
     ----------
-    input_data_store : str
-        The file path of the input data.
-    input_data_type : {"processing_set", "image"}
-        The type of the input data. Currently "processing_set" and "image" are supported.
-    parallel_coords : dict
+    input_data : 
+    parallel_coords : 
         The parallel coordinates determine the parallelism of the map graph.
         The keys in the parallel coordinates can by any combination of the dimension coordinates in the input data.
         The values are XRADIO measures with an adittional key called data_chunks that devides the values in data into chunks.
@@ -43,11 +37,11 @@ def map(
                 frame: 'LSRK'
                 type: spectral_coord
                 units: ['Hz']
-    node_task : Callable[..., Any]
+    node_task : 
         The function that forms the nodes in the graph.
-    input_parms : dict
+    input_parms : 
         The input parameters to be passed to node_task.
-    ps_sel_parms : dict, optional
+    ps_sel_parms : optional
         , by default {}
     client : optional
         The Dask client, by default None.
@@ -58,15 +52,6 @@ def map(
     graph:
         Dask graph along with coordinates.
     """
-
-    # Load Metadata
-    if input_data_type == "processing_set":
-        input_data = read_processing_set(
-            input_data_store, ps_sel_parms["intents"], ps_sel_parms["fields"]
-        )
-    elif input_data_type == "image":
-        input_data = {"image": read_image(input_data_store)}
-
     n_tasks = len(node_task_data_mapping)
     print(n_tasks)
     (
@@ -75,34 +60,42 @@ def map(
         date_time,
         tasks_to_node_map,
         nodes_ip_list,
-    ) = _local_cache_configuration(n_tasks,client)
+    ) = _local_cache_configuration(n_tasks, client, date_time)
     print(local_cache)
 
     graph_list = []
     for task_id, node_task_parameters in node_task_data_mapping.items():
-        print(task_id, node_task_parameters.keys())
-
-        input_parms = node_task_parameters
+        # print(task_id, node_task_parameters.keys())
+        input_parms.update(node_task_parameters)
         input_parms["date_time"] = date_time
         input_parms["viper_local_dir"] = viper_local_dir
-        input_parms["input_data_store"] = input_data_store
         input_parms["task_id"] = task_id
+
+        if in_memory_compute:
+            input_parms["input_data_sel"] = _select_data(input_data, input_parms["data_selection"])
 
         if local_cache:
             node_ip = nodes_ip_list[tasks_to_node_map[task_id]]
-            # logger.debug(
-            #     "Task with chunk id "
-            #     + str(chunk_id)
-            #     + " is assigned to ip "
-            #     + str(node_ip)
-            # )
             input_parms["node_ip"] = node_ip
             with dask.annotate(resources={node_ip: 1}):
                 graph_list.append(dask.delayed(node_task)(dask.delayed(input_parms)))
         else:
             # print("input_parms",input_parms)
             graph_list.append(dask.delayed(node_task)(dask.delayed(input_parms)))
+
     return graph_list, input_parms["date_time"]
+
+
+def _select_data(input_data, data_selection):
+    if isinstance(input_data, processing_set):
+        input_data_sel = processing_set()
+    else:
+        input_data_sel = {}
+
+    for xds_name, xds_isel in data_selection.items():
+        input_data_sel[xds_name] = input_data[xds_name].isel(xds_isel).load()
+
+    return input_data_sel
 
 
 def _local_cache_configuration(n_tasks, client, date_time):

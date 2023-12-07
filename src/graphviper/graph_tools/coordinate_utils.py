@@ -102,7 +102,7 @@ def interpolate_data_coords_onto_parallel_coords(
         node_task_data_mapping[task_id]["parallel_dims"] = parallel_dims
         node_task_data_mapping[task_id]["data_selection"] = {}
 
-        node_coords = {}
+        task_coords = {}
         for i_dim, dim in enumerate(parallel_dims):
             chunk_coords = {}
             chunk_coords["data"] = parallel_coords[dim]["data_chunks"][
@@ -110,9 +110,9 @@ def interpolate_data_coords_onto_parallel_coords(
             ]
             chunk_coords["dims"] = parallel_coords[dim]["dims"]
             chunk_coords["attrs"] = parallel_coords[dim]["attrs"]
-            node_coords[dim] = chunk_coords
+            task_coords[dim] = chunk_coords
 
-        node_task_data_mapping[task_id]["node_coords"] = node_coords
+        node_task_data_mapping[task_id]["task_coords"] = task_coords
 
         for xds_name in input_data.keys():
             node_task_data_mapping[task_id]["data_selection"][xds_name] = {}
