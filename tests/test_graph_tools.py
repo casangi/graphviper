@@ -1,9 +1,10 @@
 def test_map_reduce():
     from xradio.data.datasets import download
-    from graphviper.graph_tools import map
+    from graphviper.graph_tools.map import map2
     import dask
 
     import dask
+
     dask.config.set(scheduler="synchronous")
 
     ps_name = "Antennae_North.cal.lsrk.split.vis.zarr"
@@ -11,19 +12,16 @@ def test_map_reduce():
 
     from xradio.vis.read_processing_set import read_processing_set
 
-    # fields = ["NGC4038 - Antennae North"]
-    intents = ["OBSERVE_TARGET#ON_SOURCE"]
-    fields = None
     ps = read_processing_set(
         ps_name=ps_name,
         intents=["OBSERVE_TARGET#ON_SOURCE"],
-        fields=fields,
+        fields=None,
     )
     ms_xds = ps[
         "Antennae_North.cal.lsrk.split_ddi_0_intent_OBSERVE_TARGET#ON_SOURCE_field_id_0"
     ]
 
-    from graphviper.graph_tools.utils import make_parallel_coord
+    from graphviper.graph_tools.coordinate_utils import make_parallel_coord
 
     parallel_coords = {}
     n_chunks = 4
@@ -38,26 +36,29 @@ def test_map_reduce():
 
     def my_func(input_parms):
         from xradio.vis.load_processing_set import load_processing_set
+
         ps = load_processing_set(
-                ps_name=input_parms["input_data_name"],
-                sel_parms=input_parms["data_sel"],
-            )
+            ps_name=input_parms["input_data_store"],
+            sel_parms=input_parms["data_sel"],
+        )
         test_sum = 0
         for ms_xds in ps.values():
-            test_sum = test_sum  + ms_xds.frequency[-1].data/(100*(input_parms['chunk_indx'][0]+input_parms['chunk_indx'][1]+1))
-        return test_sum #input_parms["test_input"]
+            test_sum = test_sum + ms_xds.frequency[-1].data / (
+                100 * (input_parms["chunk_indx"][0] + input_parms["chunk_indx"][1] + 1)
+            )
+        return test_sum  # input_parms["test_input"]
 
     input_parms = {}
     input_parms["test_input"] = 42
     sel_parms = {}
     sel_parms["fields"] = ["NGC4038 - Antennae North"]
     sel_parms["intents"] = ["OBSERVE_TARGET#ON_SOURCE"]
-    graph = map(
-        input_data_name=ps_name,
+    graph = map2(
+        input_data_store=ps_name,
         input_data_type="processing_set",
         ps_sel_parms=sel_parms,
         parallel_coords=parallel_coords,
-        func_chunk=my_func,
+        node_task=my_func,
         input_parms=input_parms,
         client=None,
     )
@@ -75,3 +76,23 @@ def test_map_reduce():
     )  # mode "tree","single_node"
 
     assert dask.compute(graph_reduce)[0][0][0] == 44544495255.635056
+
+
+test_map_reduce()
+
+
+'''
+chunk_indx 0 (0, 0)
+chunk_indx 1 (0, 1)
+chunk_indx 2 (0, 2)
+chunk_indx 3 (1, 0)
+chunk_indx 4 (1, 1)
+chunk_indx 5 (1, 2)
+chunk_indx 6 (2, 0)
+chunk_indx 7 (2, 1)
+chunk_indx 8 (2, 2)
+chunk_indx 9 (3, 0)
+chunk_indx 10 (3, 1)
+chunk_indx 11 (3, 2)
+
+'''
