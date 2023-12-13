@@ -70,8 +70,14 @@ def interpolate_data_coords_onto_parallel_coords(
 
             chunk_indx_start_stop = {}
             # Interpolate all the chunk edges. This is done for performance reasons.
+
+            if "data_chunks_edges" not in pc:
+                pc["data_chunks_edges"] = _array_split_edges(pc["data_chunks"])
+
             interp_index = interpolator(pc["data_chunks_edges"]).astype(int)
             i = 0
+
+            #print('interp_index',interp_index)
 
             # Split the interp_index for each chunk and fix any boundry issues.
             for chunk_index in sorted(pc["data_chunks"].keys()):
@@ -80,6 +86,8 @@ def interpolate_data_coords_onto_parallel_coords(
                 else:
                     if interp_index[i] == -1:
                         interp_index[i] = 0
+                    if interp_index[i+1] == -1:
+                        interp_index[i+1] = -2    
                     chunk_indx_start_stop[chunk_index] = slice(
                         interp_index[i], interp_index[i + 1] + 1
                     )

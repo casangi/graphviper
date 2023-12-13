@@ -4,9 +4,8 @@ def test_map_reduce():
     from graphviper.graph_tools.coordinate_utils import interpolate_data_coords_onto_parallel_coords
     import dask
 
-    import dask
-
-    dask.config.set(scheduler="synchronous")
+    from graphviper.dask.client import local_client
+    viper_client = local_client(cores=2, memory_limit="3GB")
 
     ps_name = "Antennae_North.cal.lsrk.split.vis.zarr"
     download(file=ps_name, source="dropbox")
@@ -35,6 +34,7 @@ def test_map_reduce():
         coord=ms_xds.frequency, n_chunks=n_chunks
     )
 
+
     def my_func(input_parms):
         from xradio.vis.load_processing_set import load_processing_set
         #print(input_parms.keys())
@@ -52,7 +52,7 @@ def test_map_reduce():
     input_parms = {}
     input_parms["test_input"] = 42
     input_parms["input_data_store"] = ps_name
-    print(input_parms)
+    #print(input_parms)
     node_task_data_mapping = interpolate_data_coords_onto_parallel_coords(parallel_coords, ps)
 
     graph = map(
@@ -77,6 +77,7 @@ def test_map_reduce():
     )  # mode "tree","single_node"
 
     assert dask.compute(graph_reduce)[0][0][0] == 44544495255.635056
+    viper_client.close()
 
 
 test_map_reduce()

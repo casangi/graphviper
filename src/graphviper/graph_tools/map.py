@@ -53,7 +53,7 @@ def map(
         Dask graph along with coordinates.
     """
     n_tasks = len(node_task_data_mapping)
-    print(n_tasks)
+    #print(n_tasks)
     (
         local_cache,
         viper_local_dir,
@@ -61,7 +61,7 @@ def map(
         tasks_to_node_map,
         nodes_ip_list,
     ) = _local_cache_configuration(n_tasks, client, date_time)
-    print(local_cache)
+    #print(local_cache)
 
     graph_list = []
     for task_id, node_task_parameters in node_task_data_mapping.items():
@@ -72,7 +72,9 @@ def map(
         input_parms["task_id"] = task_id
 
         if in_memory_compute:
-            input_parms["input_data_sel"] = _select_data(input_data, input_parms["data_selection"])
+            input_parms["input_data"] = _select_data(input_data, input_parms["data_selection"])
+        else:
+            input_parms["input_data"] = None
 
         if local_cache:
             node_ip = nodes_ip_list[tasks_to_node_map[task_id]]

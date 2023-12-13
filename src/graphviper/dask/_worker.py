@@ -1,6 +1,6 @@
 import click
 
-from graphviper._logger import _setup_worker_logger
+from graphviper.logger import setup_worker_logger
 
 
 class _worker:
@@ -25,7 +25,7 @@ class _worker:
         registered.
         """
 
-        self.logger = _setup_worker_logger(
+        self.logger = setup_worker_logger(
             self.log_to_term,
             self.log_to_file,
             self.log_file,
