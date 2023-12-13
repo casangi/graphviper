@@ -186,7 +186,7 @@ def _check_dataset(vis_dataset, data_variable_name):
     return True
 
 
-def _check_sel_parms(
+def check_sel_parms(
     xds,
     sel_parms,
     new_or_modified_data_variables={},
