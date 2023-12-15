@@ -8,6 +8,7 @@ import datetime
 from typing import Dict, Union
 import copy
 
+
 def map(
     input_data: Union[Dict, processing_set],
     node_task_data_mapping: dict,
@@ -15,14 +16,14 @@ def map(
     input_parms: dict,
     in_memory_compute=False,
     client=None,
-    date_time: str = None
+    date_time: str = None,
 ):
     """Builds a perfectly parallel graph where a node is created for each chunk defined in parallel_coords.
 
     Parameters
     ----------
-    input_data : 
-    parallel_coords : 
+    input_data :
+    parallel_coords :
         The parallel coordinates determine the parallelism of the map graph.
         The keys in the parallel coordinates can by any combination of the dimension coordinates in the input data.
         The values are XRADIO measures with an adittional key called data_chunks that devides the values in data into chunks.
@@ -37,9 +38,9 @@ def map(
                 frame: 'LSRK'
                 type: spectral_coord
                 units: ['Hz']
-    node_task : 
+    node_task :
         The function that forms the nodes in the graph.
-    input_parms : 
+    input_parms :
         The input parameters to be passed to node_task.
     ps_sel_parms : optional
         , by default {}
@@ -53,7 +54,7 @@ def map(
         Dask graph along with coordinates.
     """
     n_tasks = len(node_task_data_mapping)
-    #print(n_tasks)
+    # print(n_tasks)
     (
         local_cache,
         viper_local_dir,
@@ -61,7 +62,7 @@ def map(
         tasks_to_node_map,
         nodes_ip_list,
     ) = _local_cache_configuration(n_tasks, client, date_time)
-    #print(local_cache)
+    # print(local_cache)
 
     graph_list = []
     for task_id, node_task_parameters in node_task_data_mapping.items():
@@ -72,7 +73,9 @@ def map(
         input_parms["task_id"] = task_id
 
         if in_memory_compute:
-            input_parms["input_data"] = _select_data(input_data, input_parms["data_selection"])
+            input_parms["input_data"] = _select_data(
+                input_data, input_parms["data_selection"]
+            )
         else:
             input_parms["input_data"] = None
 

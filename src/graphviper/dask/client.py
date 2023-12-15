@@ -16,22 +16,61 @@ from graphviper.dask._worker import (
 
 
 def local_client(
-    cores=None,
-    memory_limit=None,
-    autorestrictor=False,
-    dask_local_dir=None,
-    local_dir=None,
-    wait_for_workers=True,
-    log_parms={},
-    worker_log_parms={},
+    cores: int = None,
+    memory_limit: str = None,
+    autorestrictor: bool = False,
+    dask_local_dir: str = None,
+    local_dir: str = None,
+    wait_for_workers: bool = True,
+    log_parms: dict = {},
+    worker_log_parms: dict = {},
 ):
-    """
-    local_dir setting is only useful for testing since this function creates a local cluster. slurm_cluster_client should be used for a multinode cluster.
+    """Creates a Dask local cluster and setups the logger.
 
-    https://github.com/dask/dask/issues/5577
-    log_parms['log_to_term'] = True/False
-    log_parms['log_file'] = True/False
-    log_parms['log_level'] =
+    Parameters
+    ----------
+    cores : int, optional
+        Number of cores in local Dask cluster.
+    memory_limit : str, optional
+        Amount of memory per core.
+    autorestrictor : bool, optional
+        Experimental modified Dask schedular.
+    dask_local_dir : str, optional
+         Where Dask should store temporary files, defaults to None. If None Dask will use "./dask-worker-space".
+    local_dir : str, optional
+        Used for testing local caching of data. 
+    wait_for_workers : bool, optional
+        _description_, by default True
+    log_params : dict, optional
+        The logger for the main process (code that does not run in parallel), defaults to log_params = 
+            {
+                "log_to_term":True,
+                "log_level":"INFO",
+                "log_to_file":False,
+                "log_file":"viper_"
+            }
+    log_params["log_to_term"]: bool, optional
+        Prints logging statements to the terminal, default to True.
+    log_params["log_level"]: str, optional
+        Log level options are: "CRITICAL", "ERROR", "WARNING", "INFO", and "DEBUG". \
+        With defaults of "INFO".
+    log_params["log_to_file"]: bool, optional
+        Write log to file, defaults to False.
+    log_params["log_file"]: str, optional
+        If log_params["log_to_file"] is True the log will be written to a file with the name: \
+        log_params["log_file"].
+    worker_log_params: dict, optional
+        worker_log_params: Keys as same as log_params, default to worker_log_params =
+            {
+                "log_to_term":False,
+                "log_level":"INFO",
+                "log_to_file":False,
+                "log_file":None
+            }
+    Returns
+    -------
+    distributed.Client
+        Dask Distributed Client
     """
 
     _log_parms = copy.deepcopy(log_parms)
@@ -80,8 +119,8 @@ def local_client(
 
     """ This method of assigning a worker plugin does not seem to work when using dask_jobqueue. Consequently using client.register_worker_plugin so that the method of assigning a worker plugin is the same for local_client and slurm_cluster_client.
     if local_cache or _worker_log_parms:
-        dask.config.set({"distributed.worker.preload": os.path.join(viper_path,'_utils/_worker.py')})
-        dask.config.set({"distributed.worker.preload-argv": ["--local_cache",local_cache,"--log_to_term",_worker_log_parms['log_to_term'],"--log_to_file",_worker_log_parms['log_to_file'],"--log_file",_worker_log_parms['log_file'],"--log_level",_worker_log_parms['log_level']]})
+        dask.config.set({"distributed.worker.preload": os.path.join(viper_path,"_utils/_worker.py")})
+        dask.config.set({"distributed.worker.preload-argv": ["--local_cache",local_cache,"--log_to_term",_worker_log_parms["log_to_term"],"--log_to_file",_worker_log_parms["log_to_file"],"--log_file",_worker_log_parms["log_file"],"--log_level",_worker_log_parms["log_level"]]})
     """
     # setup distributed based multiprocessing environment
     if cores is None:
@@ -93,7 +132,7 @@ def local_client(
         )
     cluster = distributed.LocalCluster(
         n_workers=cores, threads_per_worker=1, processes=True, memory_limit=memory_limit
-    )  # , silence_logs=logging.ERROR #,resources={'GPU': 2}
+    )  # , silence_logs=logging.ERROR #,resources={"GPU": 2}
     client = distributed.Client(cluster)
     client.get_versions(check=True)
 
@@ -113,36 +152,31 @@ def local_client(
 
 
 def slurm_cluster_client(
-    workers_per_node,
-    cores_per_node,
-    memory_per_node,
-    number_of_nodes,
-    queue,
-    interface,
-    python_env_dir,
-    dask_local_dir,
-    dask_log_dir,
-    exclude_nodes="nmpost090",
-    dashboard_port=9000,
-    local_dir=None,
-    autorestrictor=False,
-    wait_for_workers=True,
+    workers_per_node: int,
+    cores_per_node: int,
+    memory_per_node: str,
+    number_of_nodes: int,
+    queue: str,
+    interface: str,
+    python_env_dir: str,
+    dask_local_dir: str,
+    dask_log_dir: str,
+    exclude_nodes: str,
+    dashboard_port: int,
+    local_dir: str = None,
+    autorestrictor: bool = False,
+    wait_for_workers: bool = True,
     log_parms={},
     worker_log_parms={},
 ):
     """
-    local_cache setting is only useful for testing since this function creates a local cluster. slurm_cluster_client should be used for a multinode cluster.
-
-    https://github.com/dask/dask/issues/5577
-    log_parms['log_to_term'] = True/False
-    log_parms['log_file'] = True/False
-    log_parms['log_level'] =
+    Creates a Dask slurm_cluster_client on a multinode cluster.
 
     interface eth0, ib0
-    python "/mnt/condor/jsteeb/viper_py/bin/python"
-    dask_local_dir "/mnt/condor/jsteeb"
-    dask_log_dir "/.lustre/aoc/projects/ngvla/viper/ngvla_sim",
     """
+
+
+    #https://github.com/dask/dask/issues/5577
 
     from dask_jobqueue import SLURMCluster
     from distributed import Client, config, performance_report
@@ -193,8 +227,8 @@ def slurm_cluster_client(
 
     """ This method of assigning a worker plugin does not seem to work when using dask_jobqueue. Consequently using client.register_worker_plugin so that the method of assigning a worker plugin is the same for local_client and slurm_cluster_client.
     if local_cache or _worker_log_parms:
-        dask.config.set({"distributed.worker.preload": os.path.join(viper_path,'_utils/_worker.py')})
-        dask.config.set({"distributed.worker.preload-argv": ["--local_cache",local_cache,"--log_to_term",_worker_log_parms['log_to_term'],"--log_to_file",_worker_log_parms['log_to_file'],"--log_file",_worker_log_parms['log_file'],"--log_level",_worker_log_parms['log_level']]})
+        dask.config.set({"distributed.worker.preload": os.path.join(viper_path,"_utils/_worker.py")})
+        dask.config.set({"distributed.worker.preload-argv": ["--local_cache",local_cache,"--log_to_term",_worker_log_parms["log_to_term"],"--log_to_file",_worker_log_parms["log_to_file"],"--log_file",_worker_log_parms["log_file"],"--log_level",_worker_log_parms["log_level"]]})
     """
 
     cluster = SLURMCluster(
@@ -211,7 +245,7 @@ def slurm_cluster_client(
         job_extra_directives=["--exclude=" + exclude_nodes],
         # job_extra_directives=["--exclude=nmpost087,nmpost089,nmpost088"],
         scheduler_options={"dashboard_address": ":" + str(dashboard_port)},
-    )  # interface='ib0'
+    )  # interface="ib0"
 
     client = Client(cluster)
 
@@ -240,7 +274,7 @@ def _set_up_dask(local_directory):
     dask.config.set({"distributed.scheduler.unknown-task-duration": "99m"})
     dask.config.set({"distributed.worker.memory.pause": False})
     dask.config.set({"distributed.worker.memory.terminate": False})
-    # dask.config.set({"distributed.worker.memory.recent-to-old-time": '999s'})
+    # dask.config.set({"distributed.worker.memory.recent-to-old-time": "999s"})
     dask.config.set({"distributed.comm.timeouts.connect": "3600s"})
     dask.config.set({"distributed.comm.timeouts.tcp": "3600s"})
     dask.config.set({"distributed.nanny.environ.OMP_NUM_THREADS": 1})

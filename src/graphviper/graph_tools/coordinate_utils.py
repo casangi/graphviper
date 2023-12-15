@@ -5,6 +5,7 @@ from xradio.vis._processing_set import processing_set
 from scipy.interpolate import interp1d
 import itertools
 
+
 def interpolate_data_coords_onto_parallel_coords(
     parallel_coords: dict,
     input_data: Union[Dict, processing_set],
@@ -77,7 +78,7 @@ def interpolate_data_coords_onto_parallel_coords(
             interp_index = interpolator(pc["data_chunks_edges"]).astype(int)
             i = 0
 
-            #print('interp_index',interp_index)
+            # print('interp_index',interp_index)
 
             # Split the interp_index for each chunk and fix any boundry issues.
             for chunk_index in sorted(pc["data_chunks"].keys()):
@@ -86,8 +87,8 @@ def interpolate_data_coords_onto_parallel_coords(
                 else:
                     if interp_index[i] == -1:
                         interp_index[i] = 0
-                    if interp_index[i+1] == -1:
-                        interp_index[i+1] = -2    
+                    if interp_index[i + 1] == -1:
+                        interp_index[i + 1] = -2
                     chunk_indx_start_stop[chunk_index] = slice(
                         interp_index[i], interp_index[i + 1] + 1
                     )
@@ -145,6 +146,7 @@ def interpolate_data_coords_onto_parallel_coords(
 
     return node_task_data_mapping
 
+
 def make_time_coord(
     time_start="2019-10-03T19:00:00.000",
     time_delta=3600,
@@ -173,6 +175,7 @@ def make_time_coord(
             "time_scale": time_scale,
         },
     }
+
 
 def make_frequency_coord(
     freq_start=3 * 10**9,
@@ -236,6 +239,7 @@ def _array_split(data, n_chunks):
         result.append(np.array(chunk))
 
     return result
+
 
 def _make_iter_chunks_indices(parallel_coords):
     parallel_dims = []

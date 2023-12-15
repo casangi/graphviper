@@ -1,10 +1,13 @@
 def test_map_reduce():
     from xradio.data.datasets import download
     from graphviper.graph_tools.map import map
-    from graphviper.graph_tools.coordinate_utils import interpolate_data_coords_onto_parallel_coords
+    from graphviper.graph_tools.coordinate_utils import (
+        interpolate_data_coords_onto_parallel_coords,
+    )
     import dask
 
     from graphviper.dask.client import local_client
+
     viper_client = local_client(cores=2, memory_limit="3GB")
 
     ps_name = "Antennae_North.cal.lsrk.split.vis.zarr"
@@ -34,10 +37,10 @@ def test_map_reduce():
         coord=ms_xds.frequency, n_chunks=n_chunks
     )
 
-
     def my_func(input_parms):
         from xradio.vis.load_processing_set import load_processing_set
-        #print(input_parms.keys())
+
+        # print(input_parms.keys())
         ps = load_processing_set(
             ps_name=input_parms["input_data_store"],
             sel_parms=input_parms["data_selection"],
@@ -45,15 +48,22 @@ def test_map_reduce():
         test_sum = 0
         for ms_xds in ps.values():
             test_sum = test_sum + ms_xds.frequency[-1].data / (
-                100 * (input_parms["chunk_indices"][0] + input_parms["chunk_indices"][1] + 1)
+                100
+                * (
+                    input_parms["chunk_indices"][0]
+                    + input_parms["chunk_indices"][1]
+                    + 1
+                )
             )
         return test_sum  # input_parms["test_input"]
 
     input_parms = {}
     input_parms["test_input"] = 42
     input_parms["input_data_store"] = ps_name
-    #print(input_parms)
-    node_task_data_mapping = interpolate_data_coords_onto_parallel_coords(parallel_coords, ps)
+    # print(input_parms)
+    node_task_data_mapping = interpolate_data_coords_onto_parallel_coords(
+        parallel_coords, ps
+    )
 
     graph = map(
         input_data=ps,
@@ -83,7 +93,7 @@ def test_map_reduce():
 test_map_reduce()
 
 
-'''
+"""
 chunk_indx 0 (0, 0)
 chunk_indx 1 (0, 1)
 chunk_indx 2 (0, 2)
@@ -97,4 +107,4 @@ chunk_indx 9 (3, 0)
 chunk_indx 10 (3, 1)
 chunk_indx 11 (3, 2)
 
-'''
+"""
