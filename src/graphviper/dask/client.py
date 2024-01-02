@@ -102,10 +102,11 @@ def local_client(
         dask.config.set(
             {
                 "distributed.scheduler.preload": os.path.join(
-                    viper_path, "_concurrency/_dask/_scheduler.py"
+                    viper_path, "dask/_scheduler.py"
                 )
             }
         )
+
         dask.config.set(
             {
                 "distributed.scheduler.preload-argv": [
@@ -117,7 +118,7 @@ def local_client(
             }
         )
 
-    """ This method of assigning a worker plugin does not seem to work when using dask_jobqueue. Consequently using client.register_worker_plugin so that the method of assigning a worker plugin is the same for local_client and slurm_cluster_client.
+    """ This method of assigning a worker plugin does not seem to work when using dask_jobqueue. Consequently using client.register_plugin so that the method of assigning a worker plugin is the same for local_client and slurm_cluster_client.
     if local_cache or _worker_log_parms:
         dask.config.set({"distributed.worker.preload": os.path.join(viper_path,"_utils/_worker.py")})
         dask.config.set({"distributed.worker.preload-argv": ["--local_cache",local_cache,"--log_to_term",_worker_log_parms["log_to_term"],"--log_to_file",_worker_log_parms["log_to_file"],"--log_file",_worker_log_parms["log_file"],"--log_level",_worker_log_parms["log_level"]]})
@@ -144,7 +145,7 @@ def local_client(
 
     if local_cache or _worker_log_parms:
         plugin = _worker(local_cache, _worker_log_parms)
-        client.register_worker_plugin(plugin, name="viper_worker")
+        client.register_plugin(plugin, name="viper_worker")
 
     logger.info("Created client " + str(client))
 
@@ -225,7 +226,7 @@ def slurm_cluster_client(
             }
         )
 
-    """ This method of assigning a worker plugin does not seem to work when using dask_jobqueue. Consequently using client.register_worker_plugin so that the method of assigning a worker plugin is the same for local_client and slurm_cluster_client.
+    """ This method of assigning a worker plugin does not seem to work when using dask_jobqueue. Consequently using client.register_plugin so that the method of assigning a worker plugin is the same for local_client and slurm_cluster_client.
     if local_cache or _worker_log_parms:
         dask.config.set({"distributed.worker.preload": os.path.join(viper_path,"_utils/_worker.py")})
         dask.config.set({"distributed.worker.preload-argv": ["--local_cache",local_cache,"--log_to_term",_worker_log_parms["log_to_term"],"--log_to_file",_worker_log_parms["log_to_file"],"--log_file",_worker_log_parms["log_file"],"--log_level",_worker_log_parms["log_level"]]})
@@ -259,7 +260,7 @@ def slurm_cluster_client(
 
     if local_cache or _worker_log_parms:
         plugin = _worker(local_cache, _worker_log_parms)
-        client.register_worker_plugin(plugin, name="viper_worker")
+        client.register_plugin(plugin, name="viper_worker")
 
     logger.info("Created client " + str(client))
 

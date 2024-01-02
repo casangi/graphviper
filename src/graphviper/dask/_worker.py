@@ -1,9 +1,10 @@
 import click
 
 from graphviper.logger import setup_worker_logger
+from distributed.diagnostics.plugin import WorkerPlugin
 
 
-class _worker:
+class _worker(WorkerPlugin):
     def __init__(self, local_cache, log_parms):
         # print("init local cache")
         self.local_cache = local_cache

@@ -8,7 +8,7 @@ def test_map_reduce():
 
     from graphviper.dask.client import local_client
 
-    viper_client = local_client(cores=2, memory_limit="3GB")
+    viper_client = local_client(cores=2, memory_limit="3GB", autorestrictor=True)
 
     ps_name = "Antennae_North.cal.lsrk.split.vis.zarr"
     download(file=ps_name, source="dropbox")
