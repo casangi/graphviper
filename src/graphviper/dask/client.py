@@ -2,6 +2,7 @@ import warnings, time, os, psutil, multiprocessing, re
 import dask
 import copy
 import os
+import sys
 import logging
 import graphviper
 import distributed
@@ -145,8 +146,11 @@ def local_client(
 
     if local_cache or _worker_log_parms:
         plugin = _worker(local_cache, _worker_log_parms)
-        client.register_plugin(plugin, name="viper_worker")
 
+        if sys.version_info[1] < 9:
+            client.register_worker_plugin(plugin, name="viper_worker")
+        else:
+            client.register_plugin(plugin, name="viper_worker")
     logger.info("Created client " + str(client))
 
     return client
@@ -260,7 +264,10 @@ def slurm_cluster_client(
 
     if local_cache or _worker_log_parms:
         plugin = _worker(local_cache, _worker_log_parms)
-        client.register_plugin(plugin, name="viper_worker")
+        if sys.version_info[1] < 9:
+            client.register_worker_plugin(plugin, name="viper_worker")
+        else:
+            client.register_plugin(plugin, name="viper_worker")
 
     logger.info("Created client " + str(client))
 
