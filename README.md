@@ -4,7 +4,7 @@
 ![Linux Tests](https://github.com/casangi/astrohack/actions/workflows/python-testing-linux.yml/badge.svg)
 ![macOS Tests](https://github.com/casangi/astrohack/actions/workflows/python-testing-macos.yml/badge.svg)
 
-GraphVIPER (Visibility and Image Parallel Execution Reduction) Dask based MapReduce package. It allows for mapping collection of xarray dataset to the 
+GraphVIPER (Visibility and Image Parallel Execution Reduction) Dask based MapReduce package. It allows for mapping collection of xarray datasets to Dask graph nodes followed by a reduce step.
 
 ### 
 

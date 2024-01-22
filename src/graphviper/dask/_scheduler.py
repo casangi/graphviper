@@ -208,8 +208,7 @@ def dask_setup(scheduler, autorestrictor, local_cache):
     scheduler.add_plugin(plugin)
 
 
-
-#Copied from Dask  v2023.12.0. Function depreciated.
+# Copied from Dask  v2023.12.0. Function depreciated.
 """
 BSD 3-Clause License
 
@@ -241,6 +240,8 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
+
+
 def _graph_metrics(dependencies, dependents, total_dependencies):
     r"""Useful measures of a graph used by ``dask.order.order``
 

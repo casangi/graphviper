@@ -180,8 +180,7 @@ def slurm_cluster_client(
     interface eth0, ib0
     """
 
-
-    #https://github.com/dask/dask/issues/5577
+    # https://github.com/dask/dask/issues/5577
 
     from dask_jobqueue import SLURMCluster
     from distributed import Client, config, performance_report
