@@ -23,10 +23,11 @@ def interpolate_data_coords_onto_parallel_coords(
     } = "nearest",
     assume_sorted: bool = True,
 ) -> Dict:
-    """Interpolate data_coords onto parallel_coords to create the node_task_data_mapping. 
+    """
+    Interpolate data_coords onto parallel_coords to create the node_task_data_mapping. 
     The node_task_data_mapping is a dictionary where each key is the node id of the nodes in the mapping stage of the graph, 
     and the values are dictionaries with the following keys:
-    
+
     - "chunk_indices": The indices assigned to the data chunks in the "parallel_coords". There must be an index for each "parallel_dims".
     - "parallel_dims": The dimension coordinates over which parallelism will occur.
     - "data_selection": A dictionary where the keys are the names of the datasets in the input_data, and the values are dictionaries with the coordinates and accompanying slices. 

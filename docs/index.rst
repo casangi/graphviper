@@ -1,5 +1,7 @@
 Graph Visibility and Image Parallel Execution Reduction
-===================================
+=======================================================
+
+Documentation still under development.
 
 .. image:: _media/viper_logo.jpeg
    :width: 250px
@@ -7,7 +9,7 @@ Graph Visibility and Image Parallel Execution Reduction
 
 .. toctree::
    :hidden:
-   :maxdepth: 4
+   :maxdepth: 5
 
    api
    graph_building_tutorial
