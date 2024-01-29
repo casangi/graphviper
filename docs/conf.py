@@ -120,7 +120,7 @@ pygments_style = 'sphinx'
 #
 html_theme = 'sphinx_rtd_theme'
 
-html_logo = '_media/viper_logo.jpeg'
+html_logo = '_media/graphviper_logo.jpeg'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -178,7 +178,7 @@ latex_elements = {
     #'sphinxsetup': 'hmargin={0.5in,0.5in}, vmargin={0.7in,0.7in}'
 }
 
-latex_logo = '_media/casa_logo-small.png'
+latex_logo = '_media/graphviper_logo.jpeg'
 
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title,

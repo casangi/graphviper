@@ -23,8 +23,8 @@ def interpolate_data_coords_onto_parallel_coords(
     } = "nearest",
     assume_sorted: bool = True,
 ) -> Dict:
-    """
-    Interpolate data_coords onto parallel_coords to create the node_task_data_mapping. 
+    """Interpolate data_coords onto parallel_coords to create the node_task_data_mapping. 
+
     The node_task_data_mapping is a dictionary where each key is the node id of the nodes in the mapping stage of the graph, 
     and the values are dictionaries with the following keys:
 
@@ -40,17 +40,6 @@ def interpolate_data_coords_onto_parallel_coords(
         The parallel coordinates determine the parallelism of the map graph.
         The keys in the parallel coordinates can by any combination of the dimension coordinates in the input data.
         The values are measures with an additional key called data_chunks that divides the values in data into chunks.
-        Example of parallel_coords['frequency'] with 3 chunks:
-            data: [100, 200, 300, 400, 500]
-            data_chunks
-                0: [100, 200]
-                1: [300, 400]
-                2: [500]
-            dims: ('frequency',)
-            attrs:
-                frame: 'LSRK'
-                type: spectral_coord
-                units: ['Hz']
     input_data :
         Can either be a processing_set or a Dictionary of xarray datasets. Only coordinates are needed so no actual data is loaded into memory.
     interpolation_method :
@@ -61,6 +50,54 @@ def interpolate_data_coords_onto_parallel_coords(
     -------
     node_task_data_mapping :
         Nested Dict keys: task_id, xds_name, dim. Contains the slices for each dim in a xds that a node should load.
+    Notes
+    -----
+
+    The structure of the parallel coordinates blocks::
+
+        parallel_coords = {
+            dim_0: {
+                'data': list/np.ndarray of Number,
+                'data_chunks': {
+                    0 : list/np.ndarray of Number,
+                    ⋮
+                    n_dim_i_chunks-1 : ...,
+                }
+                'data_chunk_edges': list/np.ndarray of Number,
+                'dims': tuple of str, #length 1
+                'attrs': measure attribute,
+            }
+            ⋮
+            dim_(n_dims-1): ...
+        }
+
+    Structure of  node_task_data_mapping blocks::
+
+        node_task_data_mapping = {
+            0 : {
+                'chunk_indices': tuple of int,
+                'parallel_dims': tuple of str,
+                'data_selection': {
+                        dataset_name_0: {
+                                dim_0: slice,
+                                ⋮
+                                dim_(n_dims-1): slice
+                        }
+                        ⋮
+                        dataset_name_(n_dataset-1): ...
+                }
+                'task_coords': #Is a measures
+                    dim_0:{
+                        'data': list/np.ndarray of Number,
+                        'dims': str,
+                        'attrs': measure attribute,
+                    }
+                    ⋮
+                    dim_(n_dims-1): ...
+                }
+            ⋮
+            n_nodes-1 : ...
+        }
     """
     xds_data_selection = {}  # Nested Dict keys: xds_name, dim, chunk_index.
     # Loop over every dataset and interpolate onto parallel_coords.
