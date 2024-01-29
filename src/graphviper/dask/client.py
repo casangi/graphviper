@@ -124,7 +124,7 @@ def local_client(
     # if local_cache or _worker_log_parms:
     #     dask.config.set({"distributed.worker.preload": os.path.join(viper_path,"_utils/_worker.py")})
     #     dask.config.set({"distributed.worker.preload-argv": ["--local_cache",local_cache,"--log_to_term",_worker_log_parms["log_to_term"],"--log_to_file",_worker_log_parms["log_to_file"],"--log_file",_worker_log_parms["log_file"],"--log_level",_worker_log_parms["log_level"]]})
-   
+
     # setup distributed based multiprocessing environment
     if cores is None:
         cores = multiprocessing.cpu_count()
@@ -139,9 +139,8 @@ def local_client(
     client = distributed.Client(cluster)
     client.get_versions(check=True)
 
-    
-    #When constructing a graph that has local cache enabled all workers need to be up and running.
-   
+    # When constructing a graph that has local cache enabled all workers need to be up and running.
+
     if local_cache or wait_for_workers:
         client.wait_for_workers(n_workers=cores)
 
@@ -273,11 +272,10 @@ def slurm_cluster_client(
             }
         )
 
-    #This method of assigning a worker plugin does not seem to work when using dask_jobqueue. Consequently using client.register_plugin so that the method of assigning a worker plugin is the same for local_client and slurm_cluster_client.
+    # This method of assigning a worker plugin does not seem to work when using dask_jobqueue. Consequently using client.register_plugin so that the method of assigning a worker plugin is the same for local_client and slurm_cluster_client.
     # if local_cache or _worker_log_parms:
     #     dask.config.set({"distributed.worker.preload": os.path.join(viper_path,"_utils/_worker.py")})
     #     dask.config.set({"distributed.worker.preload-argv": ["--local_cache",local_cache,"--log_to_term",_worker_log_parms["log_to_term"],"--log_to_file",_worker_log_parms["log_to_file"],"--log_file",_worker_log_parms["log_file"],"--log_level",_worker_log_parms["log_level"]]})
-
 
     cluster = SLURMCluster(
         processes=workers_per_node,
@@ -299,8 +297,7 @@ def slurm_cluster_client(
 
     cluster.scale(workers_per_node * number_of_nodes)
 
-  
-    #When constructing a graph that has local cache enabled all workers need to be up and running.
+    # When constructing a graph that has local cache enabled all workers need to be up and running.
 
     if local_cache or wait_for_workers:
         client.wait_for_workers(n_workers=workers_per_node * number_of_nodes)

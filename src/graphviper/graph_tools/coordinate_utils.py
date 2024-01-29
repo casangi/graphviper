@@ -1,3 +1,17 @@
+"""
+
+
+Nomenclature:
+
+- input data: A dictionary of ``xarray.datasets`` or a ``processing_set``.
+- n_datasets: The number of ``xarray.Datasets`` in the input data.
+- i_dim: The ith dimension name.
+- n_dims: The number of dimensions over which parallelism will occur.
+- n_dim_i_chunks: Number of chunks into which the dimension coordinate ``dim_i`` has been divided.
+- n_nodes: Number of nodes in the mapping stage of a Map Reduce graph.
+- _{}: If curly brackets are preceded by an underscore, it indicates a subscript and not a dictionary value.
+"""
+
 import numpy as np
 import xarray as xr
 from typing import Dict, Union
@@ -6,6 +20,175 @@ from scipy.interpolate import interp1d
 import itertools
 import numbers
 
+
+def make_time_coord(
+    time_start: str = "2019-10-03T19:00:00.000",
+    time_delta: numbers.Number = 3600,
+    n_samples: int = 10,
+    time_scale: {"tai", "tcb", "tcg", "tdb", "tt", "ut1", "utc", "local"} = "utc",
+):
+    """Convenience function that creates a time coordinate measures dictionary
+    that can be used to create parallel_coordinates using make_parallel_coord function.
+    The time_array values are in Unix seconds
+    (https://docs.astropy.org/en/stable/api/astropy.time.TimeUnix.html#astropy.time.TimeUnix).
+
+    Time coordinate measures dictionary format::
+
+        { "dims": "time",
+            "data": time_array,
+            "attrs": {
+            "units": "s",
+            "type": "time",
+            "format": "unix",
+            "time_scale": time_scale,
+            },
+        }
+
+    Parameters
+    ----------
+    time_start : str, optional
+        Start time string in format YYYY-MM-DDTHH:mm:ss.SSS, by default "2019-10-03T19:00:00.000"
+    time_delta : numbers.Number, optional
+        The increment between time samples in seconds, by default 3600.
+    n_samples : int, optional
+        Number of time steps, by default 10.
+    time_scale : {"tai", "tcb", "tcg", "tdb", "tt", "ut1", "utc", "local"}, optional
+        Time scale (https://docs.astropy.org/en/stable/time/#id6), by default "utc".
+
+    Returns
+    -------
+    time_coordinate :
+        Time coordinate measures dictionary.
+    """
+    from astropy.timeseries import TimeSeries
+    from astropy.time import Time
+    from astropy import units as u
+
+    time_array = np.array(
+        TimeSeries(
+            time_start=time_start,
+            time_delta=time_delta * u.s,
+            n_samples=n_samples,
+        ).time.unix
+    )
+
+    return {
+        "dims": "time",
+        "data": time_array,
+        "attrs": {
+            "units": "s",
+            "type": "time",
+            "format": "unix",
+            "time_scale": time_scale,
+        },
+    }
+
+
+def make_frequency_coord(
+    freq_start: numbers.Number = 3 * 10**9,
+    freq_delta: numbers.Number = 0.4 * 10**9,
+    n_channels: int = 50,
+    velocity_frame: {"gcrs", "icrs", "hcrs", "lsrk", "lsrd", "lsr"} = "lsrk",
+):
+    """Convenience function that creates a frequency coordinate measures dictionary
+    that can be used to create parallel_coordinates using :func:`make_parallel_coord` function.
+
+    Frequency coordinate measures dictionary format::
+
+        { "dims": "frequency",
+            "data": frequency_array,
+            "attrs": {
+            "units": "Hz",
+            "type": "spectral_coord",
+            "velocity_frame": velocity_frame,
+            },
+        }
+
+    Parameters
+    ----------
+    freq_start : str, optional
+        Start frequency in Hz, by default 3 * 10**9.
+    freq_delta : numbers.Number, optional
+        The increment between frequency samples, by default 0.4 * 10**9.
+    n_samples : int, optional
+        Number of frequency steps, by default 50.
+    velocity_frame : {'gcrs','icrs','hcrs','lsrk','lsrd','lsr'}, optional
+        `Velocity frame <https://docs.astropy.org/en/stable/coordinates/spectralcoord.html#common-velocity-frames>`_ , by default ``lsrk``.
+
+    Returns
+    -------
+    frequency_coordinate :
+        Time coordinate measures dictionary.
+    """
+    frequency_array = (np.arange(0, n_channels) * freq_delta + freq_start).astype(float)
+    return {
+        "dims": "frequency",
+        "data": frequency_array,
+        "attrs": {
+            "units": "Hz",
+            "type": "spectral_coord",
+            "velocity_frame": velocity_frame,
+        },
+    }
+
+
+def make_parallel_coord(coord: Union[Dict, xr.DataArray], n_chunks: int):
+    """Creates a single parallel coordinate from from a measures dictionary or ``xarray.DataArray``.
+
+    Parameters
+    ----------
+    coord : Union[Dict, xr.DataArray]
+        The input coordinate that will be partitioned/chunked.
+    n_chunks : int
+        How many chunks to divide coord into, by default None.
+
+    Returns
+    -------
+    parallel_coord :
+        Parallel coordinate dictionary.
+
+    Notes
+    -----
+    The structure of a parallel coordinate::
+
+        parallel_coord = {
+                'data': 1D list/np.ndarray of Number,
+                'data_chunks': {
+                    0 : 1D list/np.ndarray of Number,
+                    ⋮
+                    n_dim_i_chunks-1 : ...,
+                }
+                'data_chunk_edges': 1D list/np.ndarray of Number,
+                'dims': (dim_0,),
+                'attrs': measure attribute,
+            }
+
+    The ``dim_i`` dictionaries have keys with the following meanings:
+
+    - ``data``: An array containing all the coordinate values associated with that dimension. These values do not necessarily have to match the values in the coordinates of the input data (dictionary of ``xarray.datasets`` or ``processing_set``), as those are interpolated onto these values. The minimum and maximum values can be respectively larger or smaller than the values in the coordinates of individual ``xarray.datasets``; this will simply exclude that data from being processed. It's important to note that the ``parallel_coords`` and the input data coordinates must have the same measured attributes (reference frame, units, etc.).
+    - ``data_chunks``: A dictionary where the data is broken into chunks with integer keys. This chunking determines the parallelism of the graph. The values in the chunks can overlap.
+    - ``data_chunks_edges``: An array with the start and end values of each chunk.
+    - ``dims``: The dimension coordinate name.
+    - `attrs``: The `XRADIO measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ of the data.
+
+    Parallel coordinates can be combined into a single dictionary called the ``parallel_coords`` where the keys are the coordinate dimension names (see :func:`interpolate_data_coords_onto_parallel_coords` notes).
+    """
+
+    if isinstance(coord, xr.core.dataarray.DataArray):
+        coord = coord.copy(deep=True).to_dict()
+
+    parallel_coord = {}
+    parallel_coord["data"] = coord["data"]
+
+    parallel_coord["data_chunks"] = _array_split(coord["data"], n_chunks)
+
+    parallel_coord["data_chunks_edges"] = _array_split_edges(
+        parallel_coord["data_chunks"]
+    )
+
+    parallel_coord["dims"] = coord["dims"]
+    parallel_coord["attrs"] = coord["attrs"]
+    return parallel_coord
 
 def interpolate_data_coords_onto_parallel_coords(
     parallel_coords: dict,
@@ -23,16 +206,16 @@ def interpolate_data_coords_onto_parallel_coords(
     } = "nearest",
     assume_sorted: bool = True,
 ) -> Dict:
-    """Interpolate data_coords onto parallel_coords to create the node_task_data_mapping. 
+    """Interpolate data_coords onto parallel_coords to create the ``node_task_data_mapping``.
 
-    The node_task_data_mapping is a dictionary where each key is the node id of the nodes in the mapping stage of the graph, 
+    The node_task_data_mapping is a dictionary where each key is the node id of the nodes in the mapping stage of the graph,
     and the values are dictionaries with the following keys:
 
-    - "chunk_indices": The indices assigned to the data chunks in the "parallel_coords". There must be an index for each "parallel_dims".
-    - "parallel_dims": The dimension coordinates over which parallelism will occur.
-    - "data_selection": A dictionary where the keys are the names of the datasets in the input_data, and the values are dictionaries with the coordinates and accompanying slices. 
+    - ``chunk_indices": The indices assigned to the data chunks in the ``parallel_coords``. There must be an index for each ``parallel_dims``.
+    - ``parallel_dims": The dimension coordinates over which parallelism will occur.
+    - ``data_selection": A dictionary where the keys are the names of the datasets in the input_data, and the values are dictionaries with the coordinates and accompanying slices.
                         If a coordinate is not included, all values will be selected.
-    - "task_coords": The chunk of the parallel_coord that is assigned to this node.
+    - ``task_coords``: The chunk of the parallel_coord that is assigned to this node.
 
     Parameters
     ----------
@@ -53,7 +236,7 @@ def interpolate_data_coords_onto_parallel_coords(
     Notes
     -----
 
-    The structure of the parallel coordinates blocks::
+    The structure of the parallel coordinates::
 
         parallel_coords = {
             dim_0: {
@@ -71,33 +254,7 @@ def interpolate_data_coords_onto_parallel_coords(
             dim_(n_dims-1): ...
         }
 
-    Structure of  node_task_data_mapping blocks::
 
-        node_task_data_mapping = {
-            0 : {
-                'chunk_indices': tuple of int,
-                'parallel_dims': tuple of str,
-                'data_selection': {
-                        dataset_name_0: {
-                                dim_0: slice,
-                                ⋮
-                                dim_(n_dims-1): slice
-                        }
-                        ⋮
-                        dataset_name_(n_dataset-1): ...
-                }
-                'task_coords': #Is a measures
-                    dim_0:{
-                        'data': list/np.ndarray of Number,
-                        'dims': str,
-                        'attrs': measure attribute,
-                    }
-                    ⋮
-                    dim_(n_dims-1): ...
-                }
-            ⋮
-            n_nodes-1 : ...
-        }
     """
     xds_data_selection = {}  # Nested Dict keys: xds_name, dim, chunk_index.
     # Loop over every dataset and interpolate onto parallel_coords.
@@ -193,159 +350,7 @@ def interpolate_data_coords_onto_parallel_coords(
 
     return node_task_data_mapping
 
-
-def make_time_coord(
-    time_start: str = "2019-10-03T19:00:00.000",
-    time_delta: numbers.Number = 3600,
-    n_samples: int = 10,
-    time_scale: {"tai", "tcb", "tcg", "tdb", "tt", "ut1", "utc", "local"} = "utc",
-):
-    """Convenience function that creates a time coordinate measures dictionary
-    that can be used to create parallel_coordinates using make_parallel_coord function.
-    The time_array values are in Unix seconds
-    (https://docs.astropy.org/en/stable/api/astropy.time.TimeUnix.html#astropy.time.TimeUnix).
-
-    Time coordinate measures dictionary format:
-            { "dims": "time",
-              "data": time_array,
-              "attrs": {
-                "units": "s",
-                "type": "time",
-                "format": "unix",
-                "time_scale": time_scale,
-                },
-            }
-
-    Parameters
-    ----------
-    time_start : str, optional
-        Start time string in format YYYY-MM-DDTHH:mm:ss.SSS, by default "2019-10-03T19:00:00.000"
-    time_delta : numbers.Number, optional
-        The increment between time samples in seconds, by default 3600.
-    n_samples : int, optional
-        Number of time steps, by default 10.
-    time_scale : {"tai", "tcb", "tcg", "tdb", "tt", "ut1", "utc", "local"}, optional
-        Time scale (https://docs.astropy.org/en/stable/time/#id6), by default "utc".
-
-    Returns
-    -------
-    time_coordinate :
-        Time coordinate measures dictionary.
-    """
-    from astropy.timeseries import TimeSeries
-    from astropy.time import Time
-    from astropy import units as u
-
-    time_array = np.array(
-        TimeSeries(
-            time_start=time_start,
-            time_delta=time_delta * u.s,
-            n_samples=n_samples,
-        ).time.unix
-    )
-
-    return {
-        "dims": "time",
-        "data": time_array,
-        "attrs": {
-            "units": "s",
-            "type": "time",
-            "format": "unix",
-            "time_scale": time_scale,
-        },
-    }
-
-
-def make_frequency_coord(
-    freq_start: numbers.Number = 3 * 10**9,
-    freq_delta: numbers.Number = 0.4 * 10**9,
-    n_channels: int = 50,
-    velocity_frame: {"gcrs", "icrs", "hcrs", "lsrk", "lsrd", "lsr"} = "lsrk",
-):
-    """Convenience function that creates a frequency coordinate measures dictionary
-    that can be used to create parallel_coordinates using make_parallel_coord function.
-
-    Frequency coordinate measures dictionary format:
-            { "dims": "frequency",
-              "data": frequency_array,
-              "attrs": {
-                "units": "Hz",
-                "type": "spectral_coord",
-                "velocity_frame": velocity_frame,
-                },
-            }
-
-    Parameters
-    ----------
-    freq_start : str, optional
-        Start frequency in Hz, by default 3 * 10**9.
-    freq_delta : numbers.Number, optional
-        The increment between frequency samples, by default 0.4 * 10**9.
-    n_samples : int, optional
-        Number of frequency steps, by default 50.
-    velocity_frame : {'gcrs','icrs','hcrs','lsrk','lsrd','lsr'}, optional
-        Velocity frame (https://docs.astropy.org/en/stable/coordinates/spectralcoord.html#common-velocity-frames), by default "lsrk".
-
-    Returns
-    -------
-    frequency_coordinate :
-        Time coordinate measures dictionary.
-    """
-    frequency_array = (
-        np.arange(0, n_channels) * freq_delta + freq_start
-    ).astype(float)
-    return {
-        "dims": "frequency",
-        "data": frequency_array,
-        "attrs": {
-            "units": "Hz",
-            "type": "spectral_coord",
-            "velocity_frame": velocity_frame,
-        },
-    }
-
-
-def make_parallel_coord(coord:Union[Dict, xr.DataArray], n_chunks:int):
-    """Creates parallel coordinate from from a measures dictionary or Xarray Data Array.
-
-    Parallel coordinate dictionary keys:
-        - "data": An array containing all the coordinate values associated with that dimension. 
-        - "data_chunks": A dictionary where the data is broken into chunks with integer keys. 
-                        This chunking determines the parallelism of the graph. The values in the chunks can overlap.
-        - "data_chunks_edges": An array with the start and end values of each chunk.
-        - "dims": The dimension coordinate name.
-        - "attrs": The measures attributes of the data copied from coord input.
-    
-    Parameters
-    ----------
-    coord : Union[Dict, xr.DataArray]
-        The input coordinate that will be partitioned/chunked.
-    n_chunks : int
-        How many chunks to divide coord into, by default None.
-
-    Returns
-    -------
-    parallel_coord :
-        Parallel coordinate dictionary.
-    """
-
-    if isinstance(coord, xr.core.dataarray.DataArray):
-        coord = coord.copy(deep=True).to_dict()
-
-    parallel_coord = {}
-    parallel_coord["data"] = coord["data"]
-
-    parallel_coord["data_chunks"] = _array_split(coord["data"], n_chunks)
-
-    parallel_coord["data_chunks_edges"] = _array_split_edges(
-        parallel_coord["data_chunks"]
-    )
-
-    parallel_coord["dims"] = coord["dims"]
-    parallel_coord["attrs"] = coord["attrs"]
-    return parallel_coord
-
-def _array_split(data: Union[list,np.ndarray], n_chunks: int):
+def _array_split(data: Union[list, np.ndarray], n_chunks: int):
     """Takes an input array and splits it into n_chunk arrays which are stored in a dictionary with numbered keys.
 
     Parameters
@@ -373,11 +378,10 @@ def _array_split(data: Union[list,np.ndarray], n_chunks: int):
             break
         data_chunks_list.append(np.array(chunk))
 
-    data_chunks = dict(
-        zip(np.arange(n_chunks), data_chunks_list)
-    )
+    data_chunks = dict(zip(np.arange(n_chunks), data_chunks_list))
 
     return data_chunks
+
 
 def _array_split_edges(data_chunks_dict: Dict):
     """
@@ -399,8 +403,9 @@ def _array_split_edges(data_chunks_dict: Dict):
         data_chunks_edges.append(data_chunks_dict[key][-1])
     return data_chunks_edges
 
+
 def _make_iter_chunks_indices(parallel_coords: Dict):
-    """ Creates an iterator of all the combinations of the chunks in the parallel coordinates.
+    """Creates an iterator of all the combinations of the chunks in the parallel coordinates.
 
     Parameters
     ----------
@@ -409,7 +414,7 @@ def _make_iter_chunks_indices(parallel_coords: Dict):
     Returns
     -------
     iter_chunks_indxs, parallel_dims
-        The chunks of each 
+        The chunks of each
     """
 
     parallel_dims = []
