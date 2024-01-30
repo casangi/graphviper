@@ -1,15 +1,3 @@
-"""
-Nomenclature:
-
-- ``input data``: A dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_ or a `processing_set <https://github.com/casangi/xradio/blob/main/src/xradio/vis/_processing_set.py>`_.
-- ``n_datasets``: The number of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_ in the input data.
-- ``i_dim``: The ith dimension name.
-- ``n_dims``: The number of dimensions over which parallelism will occur.
-- ``n_dim_i_chunks``: Number of chunks into which the dimension coordinate ``dim_i`` has been divided.
-- ``n_nodes``: Number of nodes in the mapping stage of a Map Reduce graph.
-- ``_{}``: If curly brackets are preceded by an underscore, it indicates a subscript and not a dictionary value.
-"""
-
 import numpy as np
 import xarray as xr
 from typing import Dict, Union
@@ -23,8 +11,8 @@ def make_time_coord(
     time_delta: numbers.Number = 3600,
     n_samples: int = 10,
     time_scale: {"tai", "tcb", "tcg", "tdb", "tt", "ut1", "utc", "local"} = "utc",
-):
-    """Convenience function that creates a time coordinate `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ that can be used to create :ref:`parallel_coords <parallel coords>`: using :func:`make_parallel_coord` function.
+)-> Dict:
+    """Convenience function that creates a time coordinate `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ that can be used to create :ref:`parallel_coords <parallel coords>` using :func:`make_parallel_coord` function.
 
     Parameters
     ----------
@@ -39,7 +27,7 @@ def make_time_coord(
 
     Returns
     -------
-    time_coordinate :
+    Dict :
         Time coordinate `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_.
 
     Notes
@@ -87,8 +75,8 @@ def make_frequency_coord(
     freq_delta: numbers.Number = 0.4 * 10**9,
     n_channels: int = 50,
     velocity_frame: {"gcrs", "icrs", "hcrs", "lsrk", "lsrd", "lsr"} = "lsrk",
-):
-    """Convenience function that creates a frequency coordinate `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ that can be used to create parallel_coordinates using :func:`make_parallel_coord` function.
+)-> Dict:
+    """Convenience function that creates a frequency coordinate `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ that can be used to create :ref:`parallel_coords <parallel coords>` using :func:`make_parallel_coord` function.
 
     Parameters
     ----------
@@ -103,8 +91,8 @@ def make_frequency_coord(
 
     Returns
     -------
-    frequency_coordinate :
-        Time coordinate `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_.
+    Dict :
+        Frequency coordinate `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_.
 
     Notes
     -----
@@ -131,23 +119,31 @@ def make_frequency_coord(
     }
 
 
-def make_parallel_coord(coord: Union[Dict, xr.DataArray], n_chunks: int):
-    """Creates a single parallel coordinate from from a `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ or a `xarray.DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_ with measures attributes.
+def make_parallel_coord(coord: Union[Dict, xr.DataArray], n_chunks: int)-> Dict:
+    """Creates a single parallel coordinate from from a `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ or a `xarray.DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_ with `measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_.
 
+    This function only returns a single :ref:`parallel_coord <parallel coord>` to create :ref:`parallel_coords <parallel coords>` a dictionary must be created where the keys are the dimension coordinate names and the values are the respective :ref:`parallel_coord <parallel coord>`.
+    
     Parameters
     ----------
     coord : Union[Dict, xr.DataArray]
-        The input `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ or `xarray.DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_ with measures attributes.
+        The input `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ or `xarray.DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_ with `measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_.
     n_chunks : int
         How many chunks to divide coord into.
 
     Returns
     -------
-    parallel_coord :
-        Parallel coordinate dictionary.
+    Dict :
+        Parallel coordinate dictionary. See :ref:`notes <parallel coord>` for structure of dictionary.
 
     Notes
     -----
+    .. _parallel coord:
+
+    Nomenclature used:
+    - ``dim_i``: The dimension name.
+    - ``n_dim_i_chunks``: Number of chunks into which the dimension coordinate ``dim_i`` has been divided.
+
     The structure of a parallel coordinate::
 
         parallel_coord = {
@@ -164,13 +160,13 @@ def make_parallel_coord(coord: Union[Dict, xr.DataArray], n_chunks: int):
 
     The keys with the following meanings:
 
-    - ``data``: An array containing all the coordinate values associated with that dimension. These values do not necessarily have to match the values in the coordinates of the input data (dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_ or `processing_set <https://github.com/casangi/xradio/blob/main/src/xradio/vis/_processing_set.py>`_), as those are interpolated onto these values. The minimum and maximum values can be respectively larger or smaller than the values in the coordinates of individual `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_; this will simply exclude that data from being processed. It's important to note that the :ref:`parallel_coords <parallel coords>`: and the input data coordinates must have the same measured attributes (reference frame, units, etc.).
+    - ``data``: An array containing all the coordinate values associated with that dimension. These values do not necessarily have to match the values in the coordinates of the input data (dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_ or `processing_set <https://github.com/casangi/xradio/blob/main/src/xradio/vis/_processing_set.py>`_), as those are interpolated onto these values. The minimum and maximum values can be respectively larger or smaller than the values in the coordinates of individual `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_; this will simply exclude that data from being processed. It's important to note that the :ref:`parallel_coords <parallel coords>` and the input data coordinates must have the same `measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ (reference frame, units, etc.).
     - ``data_chunks``: A dictionary where the data is broken into chunks with integer keys. This chunking determines the parallelism of the graph. The values in the chunks can overlap.
     - ``data_chunks_edges``: An array with the start and end values of each chunk.
     - ``dims``: The dimension coordinate name.
     - `attrs``: The `XRADIO measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ of the data.
 
-    Parallel coordinates can be combined into a single dictionary called the :ref:`parallel_coords <parallel coords>`: where the keys are the coordinate dimension names (``dim_i``, see :func:`interpolate_data_coords_onto_parallel_coords` notes).
+    Parallel coordinates can be combined into a single dictionary called the :ref:`parallel_coords <parallel coords>` where the keys are the coordinate dimension names (``dim_i``, see :func:`interpolate_data_coords_onto_parallel_coords` notes).
     """
 
     if isinstance(coord, xr.core.dataarray.DataArray):
@@ -207,43 +203,34 @@ def interpolate_data_coords_onto_parallel_coords(
 ) -> Dict:
     """Interpolate data_coords onto parallel_coords to create the ``node_task_data_mapping``.
 
-    The node_task_data_mapping is a dictionary where each key is the node id of the nodes in the mapping stage of the graph,
-    and the values are dictionaries with the following keys:
-
-    - ``chunk_indices": The indices assigned to the data chunks in the :ref:`parallel_coords <parallel coords>`:. There must be an index for each ``parallel_dims``.
-    - ``parallel_dims": The dimension coordinates over which parallelism will occur.
-    - ``data_selection": A dictionary where the keys are the names of the datasets in the input_data, and the values are dictionaries with the coordinates and accompanying slices.
-                        If a coordinate is not included, all values will be selected.
-    - ``task_coords``: The chunk of the parallel_coord that is assigned to this node.
-
     Parameters
     ----------
-    parallel_coords :
+    parallel_coords : Dict
         The parallel coordinates determine the parallelism of the map graph.
         The keys in the parallel coordinates can by any combination of the dimension coordinates in the input data.
         See notes in docstring for structure.
-    input_data :
+    input_data : Union[Dict, processing_set]
         Can either be a `processing_set <https://github.com/casangi/xradio/blob/main/src/xradio/vis/_processing_set.py>`_ or a Dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_. Only coordinates are needed so no actual data is loaded into memory.
-    interpolation_method :
-        The kind of interpolation method to use as described in `Scipy documentation <https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interp1d.html>`_.
-    assume_sorted :
-        Are the data in parallel_coords and input_data monotonically increasing in value.
+    interpolation_method :  {"linear", "nearest", "nearest-up", "zero", "slinear", "quadratic", "cubic", "previous", "next",}, optional
+        The kind of interpolation method to use as described in `Scipy documentation <https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interp1d.html>`_ , by default ``nearest``.
+    assume_sorted : bool, optional
+        Are the data in parallel_coords and input_data monotonically increasing in value, by default True.
     Returns
     -------
-    node_task_data_mapping :
-        Nested Dict keys: task_id, xds_name, dim. Contains the slices for each dim in a xds that a node should load.
+    Dict :
+         Node task data mapping dictionary. See :ref:`notes <node task data mapping>` for structure of dictionary.
 
     Notes
     -----
     Nomenclature used:
 
-    - input data: A dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_ or a `processing_set <https://github.com/casangi/xradio/blob/main/src/xradio/vis/_processing_set.py>`_.
-    - n_datasets: The number of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_ in the input data.
-    - i_dim: The ith dimension name.
-    - n_dims: The number of dimensions over which parallelism will occur.
-    - n_dim_i_chunks: Number of chunks into which the dimension coordinate ``dim_i`` has been divided.
-    - n_nodes: Number of nodes in the mapping stage of a Map Reduce graph.
-    - _{}: If curly brackets are preceded by an underscore, it indicates a subscript and not a dictionary value.
+    - ``input data``: A dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_ or a `processing_set <https://github.com/casangi/xradio/blob/main/src/xradio/vis/_processing_set.py>`_.
+    - ``n_datasets``: The number of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_ in the input data.
+    - ``dim_i``: The ith dimension name.
+    - ``n_dims``: The number of dimensions over which parallelism will occur.
+    - ``n_dim_i_chunks``: Number of chunks into which the dimension coordinate ``dim_i`` has been divided.
+    - ``n_nodes``: Number of nodes in the mapping stage of a Map Reduce graph.
+    - ``_{}``: If curly brackets are preceded by an underscore, it indicates a subscript and not a dictionary value.
 
     .. _parallel coords:
     The structure of the parallel coordinates::
@@ -266,14 +253,14 @@ def interpolate_data_coords_onto_parallel_coords(
 
     The ``dim_i`` dictionaries have keys with the following meanings:
 
-    - ``data``: An array containing all the coordinate values associated with that dimension. These values do not necessarily have to match the values in the coordinates of the input data (dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_ or `processing_set <https://github.com/casangi/xradio/blob/main/src/xradio/vis/_processing_set.py>`_), as those are interpolated onto these values. The minimum and maximum values can be respectively larger or smaller than the values in the coordinates of individual `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_; this will simply exclude that data from being processed. It's important to note that the :ref:`parallel_coords <parallel coords>`: and the input data coordinates must have the same measured attributes (reference frame, units, etc.).
+    - ``data``: An array containing all the coordinate values associated with that dimension. These values do not necessarily have to match the values in the coordinates of the input data (dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_ or `processing_set <https://github.com/casangi/xradio/blob/main/src/xradio/vis/_processing_set.py>`_), as those are interpolated onto these values. The minimum and maximum values can be respectively larger or smaller than the values in the coordinates of individual `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_; this will simply exclude that data from being processed. It's important to note that the :ref:`parallel_coords <parallel coords>` and the input data coordinates must have the same measured attributes (reference frame, units, etc.).
     - ``data_chunks``: A dictionary where the data is broken into chunks with integer keys. This chunking determines the parallelism of the graph. The values in the chunks can overlap.
     - ``data_chunks_edges``: An array with the start and end values of each chunk.
     - ``dims``: The dimension coordinate name.
     - `attrs``: The `XRADIO measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ of the data.
 
     .. _node task data mapping:
-    Structure of node_task_data_mapping::
+    The node_task_data_mapping is a dictionary where each key is the node id of the nodes in the mapping stage of the graph and has the following structure::
 
         node_task_data_mapping = {
             0 : {
@@ -301,9 +288,9 @@ def interpolate_data_coords_onto_parallel_coords(
             n_nodes-1 : ...
         }
 
-    , and the values are dictionaries with the following keys:
+    Each node id dictionary has the keys with the following meaning:
 
-    - ``chunk_indices``: The indices assigned to the data chunks in the :ref:`parallel_coords <parallel coords>`:. There must be an index for each ``parallel_dims``.
+    - ``chunk_indices``: The indices assigned to the data chunks in the :ref:`parallel_coords <parallel coords>`. There must be an index for each ``parallel_dims``.
     - ``parallel_dims``: The dimension coordinates over which parallelism will occur.
     - ``data_selection``: A dictionary where the keys are the names of the datasets in the `processing_set <https://github.com/casangi/xradio/blob/main/src/xradio/vis/_processing_set.py>`_, and the values are dictionaries with the coordinates and accompanying slices. If a coordinate is not included, all values will be selected.
     - ``task_coords``: The chunk of the parallel_coord that is assigned to this node.
@@ -334,9 +321,7 @@ def interpolate_data_coords_onto_parallel_coords(
             interp_index = interpolator(pc["data_chunks_edges"]).astype(int)
             i = 0
 
-            # print('interp_index',interp_index)
-
-            # Split the interp_index for each chunk and fix any boundry issues.
+            # Split the interp_index for each chunk and fix any boundary issues.
             for chunk_index in sorted(pc["data_chunks"].keys()):
                 if interp_index[i] == -1 and interp_index[i + 1] == -1:
                     chunk_indx_start_stop[chunk_index] = slice(None)
@@ -352,14 +337,14 @@ def interpolate_data_coords_onto_parallel_coords(
 
             xds_data_selection.setdefault(xds_name, {})[dim] = chunk_indx_start_stop
 
-    # To create the node_task_data_mapping we now have to rearragne the order of
+    # To create the node_task_data_mapping we have to get the slices for each dimension on node task level.
+    # Using itertools we can get all the combinations of the chunk indices that belong to a given node:
     iter_chunks_indices, parallel_dims = _make_iter_chunks_indices(parallel_coords)
-    # print(list(iter_chunks_indices), parallel_dims)
-
     node_task_data_mapping = (
         {}
     )  # Nested Dict keys: task_id, [data_selection,chunk_indices,parallel_dims], xds_name, dim.
 
+    # Loop over every task node (each task node has a unique task_id):
     for task_id, chunk_indices in enumerate(iter_chunks_indices):
         # print("chunk_index", task_id, chunk_indices)
         node_task_data_mapping[task_id] = {}
@@ -368,6 +353,7 @@ def interpolate_data_coords_onto_parallel_coords(
         node_task_data_mapping[task_id]["data_selection"] = {}
 
         task_coords = {}
+        #For task_id get the task_coords from parallel_coords:
         for i_dim, dim in enumerate(parallel_dims):
             chunk_coords = {}
             chunk_coords["data"] = parallel_coords[dim]["data_chunks"][
@@ -379,6 +365,7 @@ def interpolate_data_coords_onto_parallel_coords(
 
         node_task_data_mapping[task_id]["task_coords"] = task_coords
 
+        #For task_id get the selection slices for each dataset in the input data from xds_data_selection:
         for xds_name in input_data.keys():
             node_task_data_mapping[task_id]["data_selection"][xds_name] = {}
             empty_chunk = False

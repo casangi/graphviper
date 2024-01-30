@@ -14,47 +14,36 @@ def map(
     node_task_data_mapping: dict,
     node_task: Callable[..., Any],
     input_parms: dict,
-    in_memory_compute=False,
+    in_memory_compute: bool = False,
     client=None,
     date_time: str = None,
-):
-    """Builds a perfectly parallel graph where a node is created for each chunk defined in parallel_coords.
+)->list:
+    """Builds a perfectly parallel graph where a node is created for each item in the :ref:`node_task_data_mapping <node task data mapping>`.
 
     Parameters
     ----------
-    input_data :
-    parallel_coords :
-        The parallel coordinates determine the parallelism of the map graph.
-        The keys in the parallel coordinates can by any combination of the dimension coordinates in the input data.
-        The values are XRADIO measures with an adittional key called data_chunks that devides the values in data into chunks.
-        Example of parallel_coords['frequency'] with 3 chunks:
-            data: [100, 200, 300, 400, 500]
-            data_chunks
-                0: [100, 200]
-                1: [300, 400]
-                2: [500]
-            dims: ('frequency',)
-            attrs:
-                frame: 'LSRK'
-                type: spectral_coord
-                units: ['Hz']
-    node_task :
-        The function that forms the nodes in the graph.
-    input_parms :
+    input_data : Union[Dict, processing_set]
+        Can either be a `processing_set <https://github.com/casangi/xradio/blob/main/src/xradio/vis/_processing_set.py>`_ or a Dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_. Only coordinates are needed so no actual data is loaded into memory.
+    node_task_data_mapping :
+        Node task data mapping dictionary. See :ref:`notes <node task data mapping>` for structure of dictionary.
+    node_task : Callable[..., Any]
+        The function that forms the nodes in the graph. The function must have a single input parameter that must be a dictionary. The ``input_params``, along with graph and coordinate-related parameters, will be passed to this function.
+    input_parms : Dict
         The input parameters to be passed to node_task.
-    ps_sel_parms : optional
-        , by default {}
+    in_memory_compute : optional
+        If true the lazy arrays in ``input_data`` are loaded into memory using `xarray.Dataset.load <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.load.html>`_ , by default False.
     client : optional
-        The Dask client, by default None.
-    date_time : optional
+        The Dask client is only required if local caching is enabled see :func:`graphviper.dask.client.slurm_cluster_client` , by default None.
+    date_time : str, optional
+        Used to annotate local cache, by default None.
 
     Returns
     -------
-    graph:
-        Dask graph along with coordinates.
+    List:
+        List of `dask.delayed <https://docs.dask.org/en/latest/delayed-api.html>`_ objects that represent the ``Dask`` graph.
     """
     n_tasks = len(node_task_data_mapping)
-    # print(n_tasks)
+
     (
         local_cache,
         viper_local_dir,
@@ -62,7 +51,6 @@ def map(
         tasks_to_node_map,
         nodes_ip_list,
     ) = _local_cache_configuration(n_tasks, client, date_time)
-    # print(local_cache)
 
     graph_list = []
     for task_id, node_task_parameters in node_task_data_mapping.items():
