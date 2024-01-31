@@ -1,23 +1,25 @@
-from typing import Callable, Any
-from xradio.vis._processing_set import processing_set
-import numpy as np
-import dask
-import math
 import os
+import math
+import dask
 import datetime
+
+import numpy as np
+import graphviper.logger as logger
+
 from typing import Dict, Union
-import copy
+from typing import Callable, Any, Tuple, List
+from xradio.vis._processing_set import processing_set
 
 
 def map(
-    input_data: Union[Dict, processing_set],
-    node_task_data_mapping: dict,
-    node_task: Callable[..., Any],
-    input_parms: dict,
-    in_memory_compute: bool = False,
-    client=None,
-    date_time: str = None,
-)->list:
+        input_data: Union[Dict, processing_set],
+        node_task_data_mapping: dict,
+        node_task: Callable[..., Any],
+        input_parms: dict,
+        in_memory_compute: bool = False,
+        client=None,
+        date_time: str = None,
+) -> Tuple[List[Any], Any]:
     """Builds a perfectly parallel graph where a node is created for each item in the :ref:`node_task_data_mapping <node task data mapping>`.
 
     Parameters
@@ -54,7 +56,8 @@ def map(
 
     graph_list = []
     for task_id, node_task_parameters in node_task_data_mapping.items():
-        # print(task_id, node_task_parameters.keys())
+        logger.debug(task_id, node_task_parameters.keys())
+
         input_parms.update(node_task_parameters)
         input_parms["date_time"] = date_time
         input_parms["viper_local_dir"] = viper_local_dir
@@ -73,7 +76,7 @@ def map(
             with dask.annotate(resources={node_ip: 1}):
                 graph_list.append(dask.delayed(node_task)(dask.delayed(input_parms)))
         else:
-            # print("input_parms",input_parms)
+            logger.debug(f"input_params: {input_parms}")
             graph_list.append(dask.delayed(node_task)(dask.delayed(input_parms)))
 
     return graph_list, input_parms["date_time"]
@@ -127,10 +130,11 @@ def _local_cache_configuration(n_tasks, client, date_time):
 def _get_unique_resource_ip(workers_info):
     nodes = []
     for worker, wi in workers_info.items():
-        worker_ip = worker[worker.rfind("/") + 1 : worker.rfind(":")]
+        worker_ip = worker[worker.rfind("/") + 1: worker.rfind(":")]
         assert worker_ip in list(
             wi["resources"].keys()
-        ), "local_cache enabled but workers have not been annotated. Make sure that local_cache has been set to True during client setup."
+        ), ("local_cache enabled but workers have not been annotated. Make sure that local_cache has been set to True "
+            "during client setup.")
         if worker_ip not in nodes:
             nodes.append(worker_ip)
     return nodes

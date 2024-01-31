@@ -1,17 +1,21 @@
-import numpy as np
-import xarray as xr
-from typing import Dict, Union
-from xradio.vis._processing_set import processing_set
-from scipy.interpolate import interp1d
 import itertools
 import numbers
 
+import numpy as np
+import xarray as xr
+import graphviper.logger as logger
+
+from typing import Dict, Union
+from xradio.vis._processing_set import processing_set
+from scipy.interpolate import interp1d
+
+
 def make_time_coord(
-    time_start: str = "2019-10-03T19:00:00.000",
-    time_delta: numbers.Number = 3600,
-    n_samples: int = 10,
-    time_scale: {"tai", "tcb", "tcg", "tdb", "tt", "ut1", "utc", "local"} = "utc",
-)-> Dict:
+        time_start: str = "2019-10-03T19:00:00.000",
+        time_delta: numbers.Number = 3600,
+        n_samples: int = 10,
+        time_scale: {"tai", "tcb", "tcg", "tdb", "tt", "ut1", "utc", "local"} = "utc",
+) -> Dict:
     """Convenience function that creates a time coordinate `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ that can be used to create :ref:`parallel_coords <parallel coords>` using :func:`make_parallel_coord` function.
 
     Parameters
@@ -47,7 +51,6 @@ def make_time_coord(
     The time_array values are in `Unix <https://docs.astropy.org/en/stable/api/astropy.time.TimeUnix.html#astropy.time.TimeUnix>`_ seconds.
     """
     from astropy.timeseries import TimeSeries
-    from astropy.time import Time
     from astropy import units as u
 
     time_array = np.array(
@@ -71,11 +74,11 @@ def make_time_coord(
 
 
 def make_frequency_coord(
-    freq_start: numbers.Number = 3 * 10**9,
-    freq_delta: numbers.Number = 0.4 * 10**9,
-    n_channels: int = 50,
-    velocity_frame: {"gcrs", "icrs", "hcrs", "lsrk", "lsrd", "lsr"} = "lsrk",
-)-> Dict:
+        freq_start: numbers.Number = 3 * 10 ** 9,
+        freq_delta: numbers.Number = 0.4 * 10 ** 9,
+        n_channels: int = 50,
+        velocity_frame: {"gcrs", "icrs", "hcrs", "lsrk", "lsrd", "lsr"} = "lsrk",
+) -> Dict:
     """Convenience function that creates a frequency coordinate `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ that can be used to create :ref:`parallel_coords <parallel coords>` using :func:`make_parallel_coord` function.
 
     Parameters
@@ -84,7 +87,7 @@ def make_frequency_coord(
         Start frequency in Hz, by default 3 * 10**9.
     freq_delta : numbers.Number, optional
         The increment between frequency samples, by default 0.4 * 10**9.
-    n_samples : int, optional
+    n_channels : int, optional
         Number of frequency steps, by default 50.
     velocity_frame : {'gcrs','icrs','hcrs','lsrk','lsrd','lsr'}, optional
         `Velocity frame <https://docs.astropy.org/en/stable/coordinates/spectralcoord.html#common-velocity-frames>`_ , by default ``lsrk``.
@@ -119,8 +122,8 @@ def make_frequency_coord(
     }
 
 
-def make_parallel_coord(coord: Union[Dict, xr.DataArray], n_chunks: int)-> Dict:
-    """Creates a single parallel coordinate from from a `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ or a `xarray.DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_ with `measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_.
+def make_parallel_coord(coord: Union[Dict, xr.DataArray], n_chunks: int) -> Dict:
+    """Creates a single parallel coordinate from a `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ or a `xarray.DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_ with `measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_.
 
     This function only returns a single :ref:`parallel_coord <parallel coord>` to create :ref:`parallel_coords <parallel coords>` a dictionary must be created where the keys are the dimension coordinate names and the values are the respective :ref:`parallel_coord <parallel coord>`.
     
@@ -185,21 +188,22 @@ def make_parallel_coord(coord: Union[Dict, xr.DataArray], n_chunks: int)-> Dict:
     parallel_coord["attrs"] = coord["attrs"]
     return parallel_coord
 
+
 def interpolate_data_coords_onto_parallel_coords(
-    parallel_coords: dict,
-    input_data: Union[Dict, processing_set],
-    interpolation_method: {
-        "linear",
-        "nearest",
-        "nearest-up",
-        "zero",
-        "slinear",
-        "quadratic",
-        "cubic",
-        "previous",
-        "next",
-    } = "nearest",
-    assume_sorted: bool = True,
+        parallel_coords: dict,
+        input_data: Union[Dict, processing_set],
+        interpolation_method: {
+            "linear",
+            "nearest",
+            "nearest-up",
+            "zero",
+            "slinear",
+            "quadratic",
+            "cubic",
+            "previous",
+            "next",
+        } = "nearest",
+        assume_sorted: bool = True,
 ) -> Dict:
     """Interpolate data_coords onto parallel_coords to create the ``node_task_data_mapping``.
 
@@ -295,7 +299,9 @@ def interpolate_data_coords_onto_parallel_coords(
     - ``data_selection``: A dictionary where the keys are the names of the datasets in the `processing_set <https://github.com/casangi/xradio/blob/main/src/xradio/vis/_processing_set.py>`_, and the values are dictionaries with the coordinates and accompanying slices. If a coordinate is not included, all values will be selected.
     - ``task_coords``: The chunk of the parallel_coord that is assigned to this node.
     """
-    xds_data_selection = {}  # Nested Dict keys: xds_name, dim, chunk_index.
+    # Nested Dict keys: xds_name, dim, chunk_index.
+    xds_data_selection = {}
+
     # Loop over every dataset and interpolate onto parallel_coords.
     for xds_name in input_data:
         for dim, pc in parallel_coords.items():
@@ -346,14 +352,14 @@ def interpolate_data_coords_onto_parallel_coords(
 
     # Loop over every task node (each task node has a unique task_id):
     for task_id, chunk_indices in enumerate(iter_chunks_indices):
-        # print("chunk_index", task_id, chunk_indices)
+        logger.debug(f"chunk_index: {task_id}, {chunk_indices}")
         node_task_data_mapping[task_id] = {}
         node_task_data_mapping[task_id]["chunk_indices"] = chunk_indices
         node_task_data_mapping[task_id]["parallel_dims"] = parallel_dims
         node_task_data_mapping[task_id]["data_selection"] = {}
 
         task_coords = {}
-        #For task_id get the task_coords from parallel_coords:
+        # For task_id get the task_coords from parallel_coords:
         for i_dim, dim in enumerate(parallel_dims):
             chunk_coords = {}
             chunk_coords["data"] = parallel_coords[dim]["data_chunks"][
@@ -365,7 +371,7 @@ def interpolate_data_coords_onto_parallel_coords(
 
         node_task_data_mapping[task_id]["task_coords"] = task_coords
 
-        #For task_id get the selection slices for each dataset in the input data from xds_data_selection:
+        # For task_id get the selection slices for each dataset in the input data from xds_data_selection:
         for xds_name in input_data.keys():
             node_task_data_mapping[task_id]["data_selection"][xds_name] = {}
             empty_chunk = False
@@ -383,11 +389,12 @@ def interpolate_data_coords_onto_parallel_coords(
                     empty_chunk = True
 
             if (
-                empty_chunk
+                    empty_chunk
             ):  # The xds with xds_name has no data for the parallel chunk (no slice on one of the dims).
                 node_task_data_mapping[task_id]["data_selection"][xds_name] = None
 
     return node_task_data_mapping
+
 
 def _array_split(data: Union[list, np.ndarray], n_chunks: int):
     """Takes an input array and splits it into n_chunk arrays which are stored in a dictionary with numbered keys.

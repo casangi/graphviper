@@ -1,8 +1,10 @@
 from typing import Callable, Any
-from typing import Dict, Union
+from typing import Dict, List
 import dask
 
-def reduce(graph: list, reduce_node_task: Callable[..., Any], input_params: Dict, mode:{"tree","single_node"}="tree")->list:
+
+def reduce(graph: list, reduce_node_task: Callable[..., Any], input_params: Dict,
+           mode: {"tree", "single_node"}="tree") -> List:
     """_summary_
 
     Parameters
@@ -21,6 +23,8 @@ def reduce(graph: list, reduce_node_task: Callable[..., Any], input_params: Dict
     list
         _description_
     """
+    graph_reduced = None
+
     if mode == "tree":
         graph_reduced = _tree_combine(
             graph[0], reduce_node_task, input_params
@@ -31,6 +35,7 @@ def reduce(graph: list, reduce_node_task: Callable[..., Any], input_params: Dict
         )
 
     return [graph_reduced, graph[1]]
+
 
 def _tree_combine(list_to_combine, reduce_node_task, input_params):
     while len(list_to_combine) > 1:
