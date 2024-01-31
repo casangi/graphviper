@@ -10,7 +10,7 @@ GraphVIPER (Visibility and Image Parallel Execution Reduction) is a [Dask](https
 
 [Documentation Link](https://graphviper.readthedocs.io/en/latest)
 
-The best place to start with GraphVIPER is doing the `graph_building_tutorial <file:///Users/jsteeb/Dropbox/graphviper/docs/build/graph_building_tutorial.html>`_ .
+The best place to start with GraphVIPER is doing the [graph_building_tutorial] (file:///Users/jsteeb/Dropbox/graphviper/docs/build/graph_building_tutorial.html).
 
 ### 
 
