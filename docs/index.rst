@@ -5,7 +5,7 @@ GraphVIPER is a `Dask <https://docs.dask.org/>`_ based MapReduce package. It all
 
 **GraphVIPER is in development and breaking API changes will happen.**
 
-The best place to start with GraphVIPER is doing the `graph_building_tutorial <https://graphviper.readthedocs.io/en/latest/graph_building_tutorial.html>`_ .
+The best place to start with GraphVIPER is doing the `graph building tutorial <https://graphviper.readthedocs.io/en/latest/graph_building_tutorial.html>`_ .
 
 .. toctree::
    :hidden:
