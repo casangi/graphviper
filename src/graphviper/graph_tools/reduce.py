@@ -15,7 +15,7 @@ def reduce(graph: list, reduce_node_task: Callable[..., Any], input_params: Dict
         The input parameters to be passed to ``node_task``. 
     mode : {"tree","single_node"}, optional
         - ``single_node``: The output from all `map` nodes is sent to a single node,
-        - ``tree``: The outputs are combined using a binary tree reduction, by default "tree"
+        - ``tree``: The outputs are combined using a binary tree reduction, by default "tree".
 
     Returns
     -------
