@@ -3,7 +3,7 @@ import numbers
 
 import numpy as np
 import xarray as xr
-import graphviper.logger as logger
+import graphviper.utils.logger as logger
 
 from typing import Dict, Union
 from xradio.vis._processing_set import processing_set

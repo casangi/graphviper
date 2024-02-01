@@ -4,7 +4,7 @@ import dask
 import datetime
 
 import numpy as np
-import graphviper.logger as logger
+import graphviper.utils.logger as logger
 
 from typing import Dict, Union
 from typing import Callable, Any, Tuple, List

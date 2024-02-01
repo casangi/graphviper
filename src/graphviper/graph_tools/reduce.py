@@ -1,10 +1,15 @@
-from typing import Callable, Any
-from typing import Dict, List
 import dask
 
+from typing import Callable, Any
+from typing import Dict, List
 
-def reduce(graph: list, reduce_node_task: Callable[..., Any], input_params: Dict,
-           mode: {"tree", "single_node"}="tree") -> List:
+
+def reduce(
+        graph: List,
+        reduce_node_task: Callable[..., Any],
+        input_params: Dict,
+        mode: {"tree", "single_node"}="tree"
+) -> List:
     """_summary_
 
     Parameters

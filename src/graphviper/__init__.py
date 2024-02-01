@@ -1,7 +1,7 @@
 import os
 
 from importlib.metadata import version
-from graphviper.logger import setup_logger
+from graphviper.utils.logger import setup_logger
 
 __version__ = version("graphviper")
 

@@ -18,8 +18,8 @@ import dask
 import logging
 
 from datetime import datetime
-from graphviper.console import Colorize
-from graphviper.console import add_verbose_info
+from graphviper.utils.console import Colorize
+from graphviper.utils.console import add_verbose_info
 
 from dask.distributed import get_worker
 
@@ -199,7 +199,7 @@ def get_worker_logger_name(logger_name: Union[str, None] = None):
     if logger_name is None:
         logger_name = "logger"
 
-    return logger_name + '_' + str(get_worker().id)
+    return "_".join((logger_name, str(get_worker().id)))
 
 
 def setup_worker_logger(
@@ -210,7 +210,7 @@ def setup_worker_logger(
         log_level: str,
         worker: dask.distributed.worker.Worker
 ):
-    parallel_logger_name = logger_name + '-' + str(worker.name)
+    parallel_logger_name = "_".join((logger_name, str(worker.name)))
 
     logger = logging.getLogger(parallel_logger_name)
     logger.setLevel(logging.getLevelName(log_level))
