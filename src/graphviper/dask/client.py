@@ -105,7 +105,7 @@ class MenrvaClient(distributed.Client):
 
 @parameter.validate(
     logger=logger.get_logger(logger_name="graphviper"),
-    config_dir=str(pathlib.Path(__file__).parent.resolve().joinpath("config/"))
+    #config_dir=str(pathlib.Path(__file__).parent.resolve().joinpath("config/"))
 )
 def local_client(
         cores: int = None,
