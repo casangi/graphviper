@@ -14,6 +14,7 @@ dependencies = [
     'astropy',
     'cerberus',
     'dask',
+    'dask_jobqueue',
     'distributed',
     'matplotlib',
     'numba>=0.57.0',

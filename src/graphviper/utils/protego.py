@@ -31,11 +31,11 @@ class Protego(cerberus.Validator):
 
         if isinstance(value, list):
             for entry in value:
-                if not entry in custom_constraint:
+                if entry not in custom_constraint:
                     self._error(field,
                                 "Allowed values not satisfied: {value} != {c}".format(value=value, c=custom_constraint))
         else:
-            if not value in custom_constraint:
+            if value not in custom_constraint:
                 self._error(field,
                             "Allowed values not satisfied: {value} != {c}".format(value=value, c=custom_constraint))
 

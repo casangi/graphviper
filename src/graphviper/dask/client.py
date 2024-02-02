@@ -16,7 +16,7 @@ from typing import Union, Dict
 
 
 @parameter.validate(
-    logger=logger.get_logger(logger_name="graphviper")
+    external_logger=logger.get_logger(logger_name="graphviper")
 )
 def local_client(
         cores: int = None,

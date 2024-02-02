@@ -26,11 +26,12 @@ class WorkerLogger:
         """
 
         self.logger = setup_worker_logger(
-            self.log_to_term,
-            self.log_to_file,
-            self.log_file,
-            self.log_level,
-            worker.id
+            logger_name="worker",
+            log_to_term=self.log_to_term,
+            log_to_file=self.log_to_file,
+            log_file=self.log_file,
+            log_level=self.log_level,
+            worker=worker
         )
 
         self.logger.debug('Logger created on worker ' + str(worker.id) + ',*,' + str(worker.address))
@@ -55,6 +56,7 @@ class WorkerLogger:
 @click.option("--log_level", default='INFO')
 async def dask_setup(worker, local_cache, log_to_term, log_to_file, log_file, log_level):
     log_params = {
+        'logger_name': "worker",
         'log_to_term': log_to_term,
         'log_to_file': log_to_file,
         'log_file': log_file,

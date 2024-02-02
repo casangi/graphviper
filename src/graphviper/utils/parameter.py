@@ -8,7 +8,7 @@ import inspect
 import functools
 import importlib
 
-import graphviper.utils.logger as logger
+import graphviper.utils.logger
 import graphviper.utils.console as console
 
 from graphviper.utils.protego import Protego
@@ -35,7 +35,7 @@ def validate(
         config_dir: str = None,
         custom_checker: Callable = None,
         add_data_type: Any = None,
-        logger: Callable = None
+        external_logger: Callable = None
 ):
     def function_wrapper(function):
         @functools.wraps(function)
@@ -58,7 +58,7 @@ def validate(
                 config_dir=config_dir,
                 custom_checker=custom_checker,
                 add_data_type=add_data_type,
-                logger=logger,
+                external_logger=external_logger,
                 meta_data=meta_data
             )
 
@@ -88,9 +88,9 @@ def config_search(root: str = "/", module_name=None) -> Union[None, str]:
     colorize = console.Colorize()
 
     if root == "/":
-        logger.warning("File search from root could take some time ...")
+        graphviper.utils.logger.warning("File search from root could take some time ...")
 
-    logger.info("Searching {} for configuration file, please wait ...".format(colorize.blue(root)))
+    graphviper.utils.logger.info("Searching {} for configuration file, please wait ...".format(colorize.blue(root)))
 
     for file in glob.glob("{root}/**".format(root=root), recursive=True):
         if module_name + ".param.json" in file:
@@ -102,12 +102,12 @@ def config_search(root: str = "/", module_name=None) -> Union[None, str]:
 
 def set_config_directory(path: str, create: bool = False) -> NoReturn:
     if pathlib.Path(path).exists():
-        logger.info("Setting configuration directory to [{path}]".format(path=path))
-        os.environ["AUROR_CONFIG_PATH"] = path
+        graphviper.utils.logger.info("Setting configuration directory to [{path}]".format(path=path))
+        os.environ["VIPER_CONFIG_PATH"] = path
     else:
-        logger.info("The configuration directory [{path}] does not currently exist.".format(path=path))
+        graphviper.utils.logger.info("The configuration directory [{path}] does not currently exist.".format(path=path))
         if create:
-            logger.info("Creating empty configuration directory: {path}".format(path=path))
+            graphviper.utils.logger.info("Creating empty configuration directory: {path}".format(path=path))
             pathlib.Path(path).mkdir()
 
 
@@ -137,7 +137,7 @@ def verify(
         config_dir: str = None,
         add_data_type: Any = None,
         custom_checker: Callable = None,
-        logger: Callable = None
+        external_logger: Callable = None
 ) -> NoReturn:
     colorize = console.Colorize()
     function_name, module_name = meta_data.values()
@@ -148,11 +148,13 @@ def verify(
 
     module_name = module_name.split(".")[-1]
 
-    if logger is None:
-        import skriba.logger
-        logger = skriba.logger.get_logger()
+    if external_logger is None:
+        logger = graphviper.utils.logger.get_logger()
 
-    logger.info(
+    else:
+        logger = external_logger
+
+    graphviper.utils.logger.info(
         "Checking parameter values for {module}.{function}".format(
             function=colorize.blue(function_name),
             module=colorize.blue(module_name))
@@ -172,19 +174,19 @@ def verify(
     #
     # This should be set according to the same pattern as PATH in terminal, ie. PATH=$PATH:/path/new
     # the parsing code will expect this.
-    elif os.getenv("AUROR_CONFIG_PATH"):
-        for paths in os.getenv("AUROR_CONFIG_PATH").split(":"):
+    elif os.getenv("VIPER_CONFIG_PATH"):
+        for paths in os.getenv("VIPER_CONFIG_PATH").split(":"):
             result = config_search(root=paths, module_name=module_name)
             logger.debug("Result: {}".format(result))
             if result:
                 path = result
-                logger.debug("AUROR_CONFIG_PATH: {dir}".format(dir=result))
+                logger.debug("VIPER_CONFIG_PATH: {dir}".format(dir=result))
                 break
 
         # If we can't find the configuration in the ENV path we will make a last ditch effort to find it in either src/,
         # if that exists or looking in the python site-packages/ directory before giving up.
         if not path:
-            logger.info("Failed to find module in AUROR_CONFIG_PATH ... attempting to check common directories ...")
+            logger.info("Failed to find module in VIPER_CONFIG_PATH ... attempting to check common directories ...")
             path = config_search(root=module_path, module_name=module_name)
 
             if not path:

@@ -103,7 +103,7 @@ class Colorize:
 
         escape_code = "\033["
 
-        if not True in args.values():
+        if True not in args.values():
             escape_code = "".join((escape_code, "0"))
 
         else:
