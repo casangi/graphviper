@@ -15,9 +15,7 @@ import graphviper.utils.console as console
 from typing import Union, Dict
 
 
-@parameter.validate(
-    external_logger=logger.get_logger(logger_name="graphviper")
-)
+@parameter.validate()
 def local_client(
         cores: int = None,
         memory_limit: str = None,
