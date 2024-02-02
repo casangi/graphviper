@@ -1,0 +1,145 @@
+{
+    "ea25_cal_small_before_fixed.split.ms":
+        {
+            "file": "ea25_cal_small_before_fixed.split.ms.zip",
+            "id": "m2qnd2w6g9fhdxyzi6h7f",
+            "rlkey": "d4dgztykxpnnqrei7jhb1cu7m"
+        },
+    "ea25_cal_small_after_fixed.split.ms":
+        {
+            "file": "ea25_cal_small_after_fixed.split.ms.zip",
+            "id": "o3tl05e3qa440s4rk5owf",
+            "rlkey": "hoxte3zzeqgkju2ywnif2t7ko"
+        },
+    "J1924-2914.ms.calibrated.split.SPW3":
+        {
+            "file": "J1924-2914.ms.calibrated.split.SPW3.zip",
+            "id": "kyrwc5y6u7lxbmqw7fveh",
+            "rlkey": "r23qakcm24bid2x2cojsd96gs"
+        },
+    "extract_holog_verification.json":
+        {
+            "file": "extract_holog_verification.json",
+            "id": "6pzucjd48a4n0eb74wys9",
+            "rlkey": "azuynw358zxvse9i225sbl59s"
+        },
+    "holog_numerical_verification.json":
+        {
+            "file": "holog_numerical_verification.json",
+            "id": "x69700pznt7uktwprdqpk",
+            "rlkey": "bxn9me7dgnxrtzvvay7xgicmi"
+        },
+    "locit-input-pha.cal":
+        {
+            "file": "locit-input-pha.cal.zip",
+            "id": "8fftz5my9h8ca2xdlupym",
+            "rlkey": "fxfid92953ycorh5wrhfgh78b"
+        },
+    "panel_cutoff_mask":
+        {
+            "file": "panel_cutoff_mask.npy",
+            "id": "8ta02t72vwcv4ketv8rfw",
+            "rlkey": "qsmos4hx2duz8upb83hghi6q8"
+        },
+    "heuristic_model":
+        {
+            "file": "elastic.model",
+            "id": "mihy28n7ei72sk2982v0y",
+            "rlkey": "xdzwfbfsrg6ehhvhaj6iyp58y"
+        },
+    "panel_test_files": {
+        "file": "panel-input-data.zip",
+        "id": "9xh0oyg936x6wifdhesjf",
+        "rlkey": "4alb24096gy0dvpzrq92q109e"
+    },
+    "AA2-Mid-sim_00000.ms": {
+        "file": "AA2-Mid-sim_00000.ms.zip",
+        "id": "2buf75ebhurjlfhe123qs",
+        "rlkey": "8wzgiavzxfp4aza4sx84qanid&dl"
+    },
+    "Antennae_M8.img.zarr": {
+        "file": "Antennae_M8.img.zarr.zip",
+        "id": "9v0a1rv7nzm3kqte0u7vp",
+        "rlkey": "ws6vd0jbo1dg7jvxsit42q5ba&dl"
+    },
+    "Antennae_North.cal.lsrk.ms": {
+        "file": "Antennae_North.cal.lsrk.ms.zip",
+        "id": "olx5qv9avdxxiyjlhlwx2",
+        "rlkey": "trrqy43rfcqj4blf9robz4p47&dl"
+    },
+    "Antennae_North.cal.lsrk.vis.zarr": {
+        "file": "Antennae_North.cal.lsrk.vis.zarr.zip",
+        "id": "9hcunmq3iqtfiww593nrp",
+        "rlkey": "7fingboduee7logszh25n95x5&dl"
+    },
+    "Antennae_North.cal.lsrk.split.ms": {
+        "file": "Antennae_North.cal.lsrk.split.ms.zip",
+        "id": "j2e5pd4y7ppvw9efxdfdj",
+        "rlkey": "hlb85n40vtac3k9nna14giwsf&dl"
+    },
+    "Antennae_North.cal.lsrk.split.vis.zarr": {
+        "file": "Antennae_North.cal.lsrk.split.ms.zip",
+        "id": "hctg3tegkl6ttf2kol0wh",
+        "rlkey": "7hxaag4vqk0d674v3368dudad&dl"
+    },
+    "complex_valued_uv.im": {
+        "file": "complex_valued_uv.im.zip",
+        "id": "wpcctbai8zqzrlpn9bjj4",
+        "rlkey": "h3qdjedq785uwlwirqyr0oo98&dl"
+    },
+    "demo_simulated.im": {
+        "file": "demo_simulated.im.zip",
+        "id": "z87gibxshwg9e2h155ukk",
+        "rlkey": "bn7uvs697wtedij63fa2hu7ed&dl"
+    },
+    "no_mask.im": {
+        "file": "no_mask.zip",
+        "id": "4azivw1q7vby4ffawy0tt",
+        "rlkey": "91g0hxwx6x4892aisbj5u195z&dl"
+    },
+    "small_lofar.ms": {
+        "file": "small_lofar.ms.zip",
+        "id": "k95j7p0yfwadqtqx9es3r",
+        "rlkey": "hg2gjxzod1riu5foc9muqqjgp&dl"
+    },
+    "small_meerkat.ms": {
+        "file": "small_meerkat.ms.zip",
+        "id": "yxuiz5jm8iy1d2r8ye76j",
+        "rlkey": "wihq0716yny24dmsz6cwf9c45&dl"
+    },
+    "global_vlbi_gg084b_reduced.ms": {
+        "file": "global_vlbi_gg084b_reduced.ms.zip",
+        "id": "we8898t15tfz2eogenhvb",
+        "rlkey": "mtp82hozzlvl92fmizu7fi577&dl"
+    },
+    "VLBA_TL016B_split_lsrk.ms": {
+        "file": "VLBA_TL016B_split_lsrk.ms.zip",
+        "id": "55r8orm3zm8mvqltya050",
+        "rlkey": "npzmoj6dnq9uadfbmcwtsc8yu&dl"
+    },
+    "ngEHT_E17A10.0.bin0000.source0000_split_lsrk.ms": {
+        "file": "ngEHT_E17A10.0.bin0000.source0000_split_lsrk.ms.zip",
+        "id": "pguaml1pk1pcpv5flli7k",
+        "rlkey": "ulk48tpnrttmtwmu0crnbqraa&dl"
+    },
+    "venus_ephem_test.ms": {
+        "file": "venus_ephem_test.ms.zip",
+        "id": "cuwle8kz6ifq9iw6330xy",
+        "rlkey": "qg73t7gwv1gtdpibkde6jkref&dl"
+    },
+    "sdimaging.ms": {
+        "file": "sdimaging.ms.zip",
+        "id": "6ng24m36yv5j0k25ybynw",
+        "rlkey": "b4uokqafyfaruwzkr6jl98mir&dl"
+    },
+    "feather_sim_sd_c1_pI.im": {
+        "file": "feather_sim_sd_c1_pI.im.zip",
+        "id": "z4e57yy19xm44sfmkyzaz",
+        "rlkey": "30o6aqrmwv2i630tdn7003ohr"
+    },
+    "feather_sim_vla_c1_pI.im": {
+        "file": "feather_sim_vla_c1_pI.im.zip",
+        "id": "98eysvd1rjyuvwrvrr600",
+        "rlkey": "c4ny98duexaodmsje0lpz2fh3&dl"
+    }
+}
