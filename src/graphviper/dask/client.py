@@ -7,7 +7,6 @@ import importlib.util
 import os
 import sys
 import logging
-import menrva
 import pathlib
 import distributed
 
@@ -181,7 +180,7 @@ def local_client(
     **Example Usage**
 
     .. parsed-literal::
-        from menrva.client import local_client
+        from graphviper.dask.client import local_client
 
         client = local_client(
             cores=2,
@@ -337,14 +336,13 @@ def slurm_cluster_client(
 
     _set_up_dask(dask_local_dir)
 
-    # viper_path = graphviper.__path__.__dict__["_path"][0]
-    viper_path = menrva.__path__.__dict__["_path"][0]
+    plugin_path = str(pathlib.Path(__file__).parent.resolve().joinpath("plugins/"))
 
     if local_cache or autorestrictor:
         dask.config.set(
             {
                 "distributed.scheduler.preload": os.path.join(
-                    viper_path, "plugins/scheduler.py"
+                    plugin_path, "plugins/scheduler.py"
                 )
             }
         )
@@ -364,7 +362,7 @@ def slurm_cluster_client(
     # slurm_cluster_client.
     #
     # if local_cache or worker_log_params:
-    #    dask.config.set({"distributed.worker.preload": os.path.join(viper_path,"_utils/_worker.py")})
+    #    dask.config.set({"distributed.worker.preload": os.path.join(plugin_path,"_utils/_worker.py")})
     #    dask.config.set({
     #    "distributed.worker.preload-argv": [
     #    "--local_cache",local_cache,
