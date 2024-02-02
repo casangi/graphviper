@@ -11,6 +11,13 @@ from typing import NoReturn
 
 
 def is_notebook() -> bool:
+    """
+        Determines if code is running in  jupyter notebook.
+    Returns
+    -------
+        bool
+
+    """
     try:
         from IPython import get_ipython
 
@@ -25,6 +32,19 @@ def is_notebook() -> bool:
 
 
 def download(file: str, folder: str = '.') -> NoReturn:
+    """
+        Download tool for data stored on dropbox.
+    Parameters
+    ----------
+    file : str
+        Filename as stored on dropbox.
+    folder : str
+        Destination folder.
+
+    Returns
+    -------
+        No return
+    """
     # Load the file dropbox file meta data.
     meta_data_path = pathlib.Path(__file__).parent.joinpath(".dropbox/file.download.json")
 

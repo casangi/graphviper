@@ -1,110 +1,22 @@
 import psutil
 import multiprocessing
 import dask
-import inspect
-import importlib
-import importlib.util
 import os
-import sys
+import dask_jobqueue
 import logging
 import pathlib
 import distributed
+import graphviper.dask.menrva
 
 import graphviper.utils.parameter as parameter
 import graphviper.utils.logger as logger
 import graphviper.utils.console as console
 
-from distributed.diagnostics.plugin import WorkerPlugin
-
-from graphviper.dask.plugins.worker import DaskWorker
-
-from typing import Union, Dict, Any, Callable, Tuple
-
-colorize = console.Colorize()
-
-
-class MenrvaClient(distributed.Client):
-    """
-    This and extended version of the general Dask distributed client that will allow for
-    plugin management and more extended features.
-    """
-
-    @staticmethod
-    def call(func: Callable, *args: Tuple[Any], **kwargs: Dict[str, Any]):
-        try:
-            params = inspect.signature(func).bind(*args, **kwargs)
-            return func(*params.args, **params.kwargs)
-
-        except TypeError as e:
-            logger.error("There was an error calling the function: {}".format(e))
-
-    @staticmethod
-    def instantiate_module(plugin: str, plugin_file: str, *args: Tuple[Any], **kwargs: Dict[str, Any]) -> WorkerPlugin:
-        """
-
-        Args:
-            plugin (str): Name of plugin module.
-            plugin_file (str): Name of module file. ** This should be moved into the module itself not passed **
-            *args (tuple(Any)): This is any *arg that needs to be passed to the plugin module.
-            **kwargs (dict[str, Any]): This is any **kwarg default values that need to be passed to the plugin module.
-
-        Returns:
-            Instance of plugin class.
-        """
-        spec = importlib.util.spec_from_file_location(plugin, plugin_file)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        for member in inspect.getmembers(module, predicate=inspect.isclass):
-            plugin_instance = getattr(module, member[0])
-            logger.debug("Loading plugin module: {}".format(plugin_instance))
-            return MenrvaClient.call(plugin_instance, *args, **kwargs)
-
-    def load_plugin(
-            self,
-            directory: str,
-            plugin: str,
-            name: str,
-            *args: Union[Tuple[Any], Any],
-            **kwargs: Union[Dict[str, Any], Any]
-    ):
-        '''
-
-        Parameters
-        ----------
-        directory :
-        plugin :
-        name :
-        args :
-        kwargs :
-
-        Returns
-        -------
-
-        '''
-
-        plugin_file = ".".join((plugin, "py"))
-        if pathlib.Path(directory).joinpath(plugin_file).exists():
-            plugin_instance = MenrvaClient.instantiate_module(
-                plugin=plugin,
-                plugin_file="/".join((directory, plugin_file)),
-                *args, **kwargs
-            )
-            logger.debug(f"{plugin}")
-            if sys.version_info.major == 3:
-                if sys.version_info.minor > 8:
-                    self.register_plugin(plugin_instance, name=name)
-
-                else:
-                    self.register_worker_plugin(plugin_instance, name=name)
-            else:
-                logger.warning("Python version may not be supported.")
-        else:
-            logger.error("Cannot find plugins directory: {}".format(colorize.red(directory)))
+from typing import Union, Dict
 
 
 @parameter.validate(
-    logger=logger.get_logger(logger_name="graphviper"),
-    #config_dir=str(pathlib.Path(__file__).parent.resolve().joinpath("config/"))
+    logger=logger.get_logger(logger_name="graphviper")
 )
 def local_client(
         cores: int = None,
@@ -118,79 +30,32 @@ def local_client(
 ) -> distributed.Client:
     """ Setup dask cluster and logger.
 
-    :param cores: Number of cores in Dask cluster, defaults to None
-    :type cores: int, optional
+    Parameters
+    ----------
+    cores : int
+        Number of cores in Dask cluster, defaults to None
+    memory_limit : str
+        Amount of memory per core. It is suggested to use '8GB', defaults to None
+    autorestrictor : bool
+        Boolean determining usage of autorestrictor plugin, defaults to False
+    dask_local_dir : str
+        Where Dask should store temporary files, defaults to None. If None Dask will use \
+        `./dask-worker-space`, defaults to None
+    local_dir : str
+        Defines client local directory, defaults to None
+    wait_for_workers : bool
+        Boolean determining usage of wait_for_workers option in dask, defaults to False
+    log_params : dict
+        The logger for the main process (code that does not run in parallel), defaults to {}
+    worker_log_params : dict
+        worker_log_params: Keys as same as log_params, default values given in `Additional \
+        Information`_.
 
-    :param memory_limit: Amount of memory per core. It is suggested to use '8GB', defaults to None
-    :type memory_limit: str, optional
-
-    :param autorestrictor: Boolean determining usage of autorestrictor plugin, defaults to False
-    :type autorestrictor: False, optional
-
-    :param local_dir: Defines client local directory, defaults to None
-    :type local_dir: str, optional
-
-    :param wait_for_workers: Boolean determining usage of wait_for_workers option in dask, defaults to False
-    :type wait_for_workers: False, optional
-
-    :param dask_local_dir: Where Dask should store temporary files, defaults to None. If None Dask will use \
-    `./dask-worker-space`, defaults to None
-    :type dask_local_dir: str, optional
-
-    :param log_params: The logger for the main process (code that does not run in parallel), defaults to {}
-    :type log_params: dict, optional
-
-    :param log_params['log_to_term']: Prints logging statements to the terminal, default to True.
-    :type log_params['log_to_term']: bool, optional
-
-    :param log_params['log_level']: Log level options are: 'CRITICAL', 'ERROR', 'WARNING', 'INFO', and 'DEBUG'. \
-    With defaults of 'INFO'.
-    :type log_params['log_level']: bool, optional
-
-    :param log_params['log_to_file']: Write log to file, defaults to False.
-    :type log_params['log_to_file']: bool, optional
-
-    :param log_params['log_file']: Log file name be written.
-    :type log_params['log_file']: bool, optional
-
-    :param worker_log_params: worker_log_params: Keys as same as log_params, default values given in `Additional \
-    Information`_.
-    :type worker_log_params: dict, optional
-
-    :return: Dask Distributed Client
-    :rtype: distributed.Client
-
-
-    .. _Additional Information:
-
-    **Additional Information**
-
-    ``worker_log_params`` default values are set internally when there is not user input. The default values are given\
-     below.
-
-    .. parsed-literal::
-        worker_log_params =
-            {
-                'log_to_term':False,
-                'log_level':'INFO',
-                'log_to_file':False,
-                'log_file':None
-            }
-
-    **Example Usage**
-
-    .. parsed-literal::
-        from graphviper.dask.client import local_client
-
-        client = local_client(
-            cores=2,
-            memory_limit='8GB',
-            log_params={
-                'log_level':'DEBUG'
-            }
-        )
-
+    Returns
+    -------
+        Dask Distributed Client
     """
+
     colorize = console.Colorize()
 
     if log_params is None:
@@ -266,7 +131,7 @@ def local_client(
         silence_logs=logging.ERROR  # , silence_logs=logging.ERROR #,resources={ 'GPU': 2}
     )
 
-    client = MenrvaClient(cluster)
+    client = graphviper.dask.menrva.MenrvaClient(cluster)
     client.get_versions(check=True)
 
     # When constructing a graph that has local cache enabled all workers need to be up and running.
@@ -306,16 +171,37 @@ def slurm_cluster_client(
         log_params: Union[None, Dict] = None,
         worker_log_params: Union[None, Dict] = None,
 ):
-    """
-    Creates a Dask slurm_cluster_client on a multinode cluster.
+    """ Creates a Dask slurm_cluster_client on a multinode cluster.
 
-    interface eth0, ib0
+        interface eth0, ib0
+
+    Parameters
+    ----------
+    workers_per_node : int
+    cores_per_node : int
+    memory_per_node : str
+    number_of_nodes : int
+    queue : str
+    interface : str
+    python_env_dir : str
+    dask_local_dir : str
+    dask_log_dir : str
+    exclude_nodes : str
+    dashboard_port : int
+    local_dir : str
+    autorestrictor : bool
+    wait_for_workers : bool
+    log_params : dict
+    worker_log_params : dict
+
+    Returns
+    -------
+        distributed.Client
     """
 
     # https://github.com/dask/dask/issues/5577
 
-    from dask_jobqueue import SLURMCluster
-    from distributed import Client
+    # from distributed import Client
 
     if log_params is None:
         log_params = {}
@@ -373,7 +259,7 @@ def slurm_cluster_client(
     #    })
     #
 
-    cluster = SLURMCluster(
+    cluster = dask_jobqueue.SLURMCluster(
         processes=workers_per_node,
         cores=cores_per_node,
         interface=interface,
@@ -382,31 +268,30 @@ def slurm_cluster_client(
         queue=queue,
         name="viper",
         python=python_env_dir,
-        # "/mnt/condor/jsteeb/viper_py/bin/python", #"/.lustre/aoc/projects/ngvla/viper/viper_py_env/bin/python",
-        local_directory=dask_local_dir,  # "/mnt/condor/jsteeb",
+        local_directory=dask_local_dir,
         log_directory=dask_log_dir,
         job_extra_directives=["--exclude=" + exclude_nodes],
         # job_extra_directives=["--exclude=nmpost087,nmpost089,nmpost088"],
         scheduler_options={"dashboard_address": ":" + str(dashboard_port)},
     )  # interface="ib0"
 
-    client = Client(cluster)
+    client = graphviper.dask.menrva.MenrvaClient(cluster)
 
     cluster.scale(workers_per_node * number_of_nodes)
 
-    """
-    When constructing a graph that has local cache enabled all workers need to be up and running.
-    """
+    # When constructing a graph that has local cache enabled all workers need to be up and running.
+
     if local_cache or wait_for_workers:
         client.wait_for_workers(n_workers=workers_per_node * number_of_nodes)
 
     if local_cache or worker_log_params:
-        plugin = DaskWorker(local_cache, worker_log_params)
-
-        if sys.version_info.minor < 9:
-            client.register_worker_plugin(plugin, name="worker_logger")
-        else:
-            client.register_plugin(plugin, name="worker_logger")
+        client.load_plugin(
+            directory=plugin_path,
+            plugin="worker",
+            name="worker_logger",
+            local_cache=local_cache,
+            log_params=worker_log_params
+        )
 
     logger.info("Created client " + str(client))
 
