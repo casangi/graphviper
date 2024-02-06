@@ -21,14 +21,15 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
+import click
+import graphviper.utils.logger as logger
+
 from collections import defaultdict
-from distributed import SchedulerPlugin
 from dask.core import reverse_dict
 from dask.base import tokenize
 from dask.order import ndependencies
-import click
+
 from distributed.diagnostics.plugin import SchedulerPlugin
-import numpy as np
 
 
 def unravel_deps(hlg_deps, name, unravelled_deps=None):
@@ -58,7 +59,7 @@ def get_node_depths(dependencies, root_nodes, metrics):
     return node_depths
 
 
-class schedular(SchedulerPlugin):
+class Scheduler(SchedulerPlugin):
     def __init__(self, autorestrictor, local_cache):
         self.autorestrictor = autorestrictor
         self.local_cache = local_cache
@@ -66,14 +67,16 @@ class schedular(SchedulerPlugin):
 
     def add_worker(self, scheduler, worker):
         if self.local_cache:
-            # Set the resource label to the ip of the node that the worker is on, so that tasks that require a specific node can be assigned to the correct worker.
+            # Set the resource label to the ip of the node that the worker is on, so that tasks that require a
+            # specific node can be assigned to the correct worker.
             ip = worker[worker.rfind("/") + 1 : worker.rfind(":")]
             scheduler.add_resources(worker=worker, resources={ip: 1})
 
     def update_graph(self, scheduler, dsk=None, keys=None, restrictions=None, **kw):
         if self.autorestrictor:
-            print("Using autorestrictor")
             """Processes dependencies to assign tasks to specific workers."""
+            logger.debug("Using autorestrictor")
+
             workers = list(scheduler.workers.keys())
             n_worker = len(workers)
 
@@ -88,7 +91,7 @@ class schedular(SchedulerPlugin):
 
                 _, total_dependencies = ndependencies(dependencies, dependents)
                 # TODO: Avoid calling graph metrics.
-                metrics = _graph_metrics(dependencies, dependents, total_dependencies)
+                metrics = graph_metrics(dependencies, dependents, total_dependencies)
 
                 # Terminal nodes have no dependents, root nodes have no dependencies.
                 # Horizontal partition nodes are initialized as the terminal nodes.
@@ -99,10 +102,8 @@ class schedular(SchedulerPlugin):
                 # distance from a root node. TODO: Optimize get_node_depths.
 
                 node_depths = get_node_depths(dependencies, root_nodes, metrics)
-                # try:
+
                 max_depth = max(node_depths.values())
-                # except:
-                #        print('&&&&& dependencies, root_nodes, metrics',node_depths,',*,',dependencies, root_nodes, metrics)
 
                 # If we have fewer partition nodes than workers, we cannot utilise all
                 # the workers and are likely dealing with a reduction. We work our way
@@ -113,8 +114,9 @@ class schedular(SchedulerPlugin):
                     _part_nodes = part_nodes.copy()
                     for pn in _part_nodes:
                         if node_depths[pn] == max_depth:
-                            part_nodes ^= set((pn,))
+                            part_nodes ^= {pn}
                             part_nodes |= dependencies[pn]
+
                     max_depth -= 1
                     if max_depth <= 0:
                         return  # In this case, there in nothing we can do - fall back.
@@ -145,7 +147,7 @@ class schedular(SchedulerPlugin):
                     if any(v < vv for vv in root_tokens.values()):  # Strict subset.
                         continue
                     else:
-                        hash_map[k] |= set([group_offset])
+                        hash_map[k] |= {group_offset}
                         group_offset += 1
 
                 # If roots were a subset, they should share the group of their
@@ -185,7 +187,7 @@ class schedular(SchedulerPlugin):
                     for task_name in task_group:
                         try:
                             task = tasks[task_name]
-                        except KeyError:  # Keys may not have an assosciated task.
+                        except KeyError:  # Keys may not have an associated task.
                             continue
 
                         # print('^^^^^^',dir(task))
@@ -204,7 +206,7 @@ class schedular(SchedulerPlugin):
 @click.option("--autorestrictor", default=False)
 @click.option("--local_cache", default=False)
 def dask_setup(scheduler, autorestrictor, local_cache):
-    plugin = schedular(autorestrictor, local_cache)
+    plugin = Scheduler(autorestrictor, local_cache)
     scheduler.add_plugin(plugin)
 
 
@@ -242,7 +244,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
 
-def _graph_metrics(dependencies, dependents, total_dependencies):
+def graph_metrics(dependencies, dependents, total_dependencies):
     r"""Useful measures of a graph used by ``dask.order.order``
 
     Example DAG (a1 has no dependencies; b2 and c1 are root nodes):
@@ -305,12 +307,12 @@ def _graph_metrics(dependencies, dependents, total_dependencies):
 
     Examples
     --------
-    >>> inc = lambda x: x + 1
-    >>> dsk = {'a1': 1, 'b1': (inc, 'a1'), 'b2': (inc, 'a1'), 'c1': (inc, 'b1')}
-    >>> dependencies, dependents = get_deps(dsk)
-    >>> _, total_dependencies = ndependencies(dependencies, dependents)
-    >>> metrics = _graph_metrics(dependencies, dependents, total_dependencies)
-    >>> sorted(metrics.items())
+    #>>> inc = lambda x: x + 1
+    #>>> dsk = {'a1': 1, 'b1': (inc, 'a1'), 'b2': (inc, 'a1'), 'c1': (inc, 'b1')}
+    #>>> dependencies, dependents = get_deps(dsk)
+    #>>> _, total_dependencies = ndependencies(dependencies, dependents)
+    #>>> metrics = _graph_metrics(dependencies, dependents, total_dependencies)
+    #>>> sorted(metrics.items())
     [('a1', (4, 2, 3, 1, 2)), ('b1', (2, 3, 3, 1, 1)), ('b2', (1, 2, 2, 0, 0)), ('c1', (1, 3, 3, 0, 0))]
 
     Returns

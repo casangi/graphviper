@@ -1,5 +1,5 @@
 def test_map_reduce():
-    from xradio.data.datasets import download
+    from graphviper.utils.data import download
     from graphviper.graph_tools.map import map
     from graphviper.graph_tools.coordinate_utils import (
         interpolate_data_coords_onto_parallel_coords,
@@ -11,7 +11,7 @@ def test_map_reduce():
     viper_client = local_client(cores=2, memory_limit="3GB", autorestrictor=True)
 
     ps_name = "Antennae_North.cal.lsrk.split.vis.zarr"
-    download(file=ps_name, source="dropbox")
+    download(file=ps_name)
 
     from xradio.vis.read_processing_set import read_processing_set
 

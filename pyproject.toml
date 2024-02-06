@@ -4,32 +4,34 @@ version = "0.0.4"
 description = "Astro Visibility and Image Parallel Execution Reduction "
 authors = [
     {name = "Jan-Willem Steeb", email="jsteeb@nrao.edu"},
+    {name = "Joshua Hoskins", email="jhoskins@nrao.edu"},
 ]
 license = {file = "LICENSE.txt"}
 readme = "README.md"
 requires-python = ">= 3.8, < 3.12"
 
 dependencies = [
-'astropy',
-'dask',
-'distributed',
-'gdown',
-'matplotlib',
-'numba>=0.57.0',
-'numpy<=1.25.0',
-'prettytable',
-'pytest',
-'pytest-cov',
-'pytest-html',
-'scipy',
-'xarray',
-'zarr',
-'bokeh',
-'jupyterlab',
-'pyarrow',
-'graphviz',
-'xradio',
-'python_casacore>=3.5.2; sys_platform != "darwin" '
+    'astropy',
+    'cerberus',
+    'dask',
+    'dask_jobqueue',
+    'distributed',
+    'matplotlib',
+    'numba>=0.57.0',
+    'numpy<=1.25.0',
+    'prettytable',
+    'pytest',
+    'pytest-cov',
+    'pytest-html',
+    'scipy',
+    'xarray',
+    'zarr',
+    'bokeh',
+    'jupyterlab',
+    'pyarrow',
+    'graphviz',
+    'xradio',
+    'python_casacore>=3.5.2; sys_platform != "darwin" '
 ]
 
 

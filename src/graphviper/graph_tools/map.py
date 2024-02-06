@@ -1,12 +1,14 @@
-from typing import Callable, Any
-from xradio.vis._processing_set import processing_set
-import numpy as np
-import dask
-import math
 import os
+import math
+import dask
 import datetime
+
+import numpy as np
+import graphviper.utils.logger as logger
+
 from typing import Dict, Union
-import copy
+from typing import Callable, Any, Tuple, List
+from xradio.vis._processing_set import processing_set
 
 
 def map(
@@ -17,7 +19,7 @@ def map(
     in_memory_compute: bool = False,
     client=None,
     date_time: str = None,
-)->list:
+) -> list:
     """Create a perfectly parallel graph where a node is generated for each item in the :ref:`node_task_data_mapping <node task data mapping>` using the function specified in the ``node_task`` parameter.
 
     Parameters
@@ -29,11 +31,11 @@ def map(
     node_task : Callable[..., Any]
         The function that forms the nodes in the graph. The function must have a single input parameter that must be a dictionary. The ``input_params``, along with graph and coordinate-related parameters, will be passed to this function.
     input_params : Dict
-        The input parameters to be passed to ``node_task``. 
+        The input parameters to be passed to ``node_task``.
         See notes for input parameters requirements.
     in_memory_compute : optional
         Setting ``in_memory_compute`` can lead to memory issues since all data is loaded into memory. Consequently, this option should only be used for testing purposes. If true the lazy arrays in ``input_data`` are loaded into memory using `xarray.Dataset.load <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.load.html>`_ , by default False.
-        See notes of how to access data in ``node_task``. 
+        See notes of how to access data in ``node_task``.
     client : optional
         The Dask client is only required if local caching is enabled see :func:`graphviper.dask.client.slurm_cluster_client` , by default None.
     date_time : str, optional
@@ -75,7 +77,7 @@ def map(
     """
     n_tasks = len(node_task_data_mapping)
 
-    #Get local_cache configuration if enabled in graphviper.dask.client.slurm_cluster_client.
+    # Get local_cache configuration if enabled in graphviper.dask.client.slurm_cluster_client.
     # local_cache will be True if enabled.
     (
         local_cache,
@@ -86,12 +88,14 @@ def map(
     ) = _local_cache_configuration(n_tasks, client, date_time)
 
     graph_list = []
-    #Create a node in Dask graph for each task_id in node_task_data_mapping
+    # Create a node in Dask graph for each task_id in node_task_data_mapping
     for task_id, node_task_parameters in node_task_data_mapping.items():
+        logger.debug(task_id, node_task_parameters.keys())
+
         input_params.update(node_task_parameters)
         input_params["task_id"] = task_id
 
-        if in_memory_compute: #Data gets loaded into memory.
+        if in_memory_compute:  # Data gets loaded into memory.
             input_params["input_data"] = _select_data(
                 input_data, input_params["data_selection"]
             )
@@ -161,9 +165,10 @@ def _get_unique_resource_ip(workers_info):
     nodes = []
     for worker, wi in workers_info.items():
         worker_ip = worker[worker.rfind("/") + 1 : worker.rfind(":")]
-        assert worker_ip in list(
-            wi["resources"].keys()
-        ), "local_cache enabled but workers have not been annotated. Make sure that local_cache has been set to True during client setup."
+        assert worker_ip in list(wi["resources"].keys()), (
+            "local_cache enabled but workers have not been annotated. Make sure that local_cache has been set to True "
+            "during client setup."
+        )
         if worker_ip not in nodes:
             nodes.append(worker_ip)
     return nodes
