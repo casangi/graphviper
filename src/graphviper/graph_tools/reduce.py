@@ -1,32 +1,26 @@
 import dask
-
 from typing import Callable, Any
 from typing import Dict, List
 
-
-def reduce(
-        graph: List,
-        reduce_node_task: Callable[..., Any],
-        input_params: Dict,
-        mode: {"tree", "single_node"}="tree"
-) -> List:
-    """_summary_
+def reduce(graph: list, reduce_node_task: Callable[..., Any], input_params: Dict, mode:{"tree","single_node"}="tree")->list:
+    """Appends a reduce step to the graph created by the :func:`graphviper.graph_tools.map`. function.
 
     Parameters
     ----------
     graph : list
-        Graph produced by :func:`graphviper.graph_tools.map`_.
+        Graph produced by :func:`graphviper.graph_tools.map`.
     reduce_node_task : _type_
-        _description_
+       The function that forms the nodes in the reduce portion of the graph must have two parameters: ``input_data`` and ``input_params``. The ``input_data`` represents the output from the mapping nodes, while ``input_params`` comes from the ``reduce`` parameter with the same name.
     input_params : Dict
-        _description_
-    mode : tree&quot;,&quot;single_node, optional
-        _description_, by default "tree"
+        The input parameters to be passed to ``node_task``. 
+    mode : {"tree","single_node"}, optional
+        - ``single_node``: The output from all `map` nodes is sent to a single node,
+        - ``tree``: The outputs are combined using a binary tree reduction, by default "tree".
 
     Returns
     -------
     list
-        _description_
+        List of a single `dask.delayed <https://docs.dask.org/en/latest/delayed-api.html>`_ objects that represent the ``reduce`` Dask graph.
     """
     graph_reduced = None
 

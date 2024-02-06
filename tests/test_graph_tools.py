@@ -37,30 +37,30 @@ def test_map_reduce():
         coord=ms_xds.frequency, n_chunks=n_chunks
     )
 
-    def my_func(input_parms):
+    def my_func(input_params):
         from xradio.vis.load_processing_set import load_processing_set
 
-        # print(input_parms.keys())
+        # print(input_params.keys())
         ps = load_processing_set(
-            ps_name=input_parms["input_data_store"],
-            sel_parms=input_parms["data_selection"],
+            ps_name=input_params["input_data_store"],
+            sel_parms=input_params["data_selection"],
         )
         test_sum = 0
         for ms_xds in ps.values():
             test_sum = test_sum + ms_xds.frequency[-1].data / (
                 100
                 * (
-                    input_parms["chunk_indices"][0]
-                    + input_parms["chunk_indices"][1]
+                    input_params["chunk_indices"][0]
+                    + input_params["chunk_indices"][1]
                     + 1
                 )
             )
-        return test_sum  # input_parms["test_input"]
+        return test_sum  # input_params["test_input"]
 
-    input_parms = {}
-    input_parms["test_input"] = 42
-    input_parms["input_data_store"] = ps_name
-    # print(input_parms)
+    input_params = {}
+    input_params["test_input"] = 42
+    input_params["input_data_store"] = ps_name
+    # print(input_params)
     node_task_data_mapping = interpolate_data_coords_onto_parallel_coords(
         parallel_coords, ps
     )
@@ -69,7 +69,7 @@ def test_map_reduce():
         input_data=ps,
         node_task_data_mapping=node_task_data_mapping,
         node_task=my_func,
-        input_parms=input_parms,
+        input_params=input_params,
         in_memory_compute=False,
         client=None,
     )
@@ -77,13 +77,13 @@ def test_map_reduce():
     from graphviper.graph_tools import reduce
     import numpy as np
 
-    def my_sum(graph_inputs, input_parms):
-        return np.sum(graph_inputs) + input_parms["test_input"]
+    def my_sum(graph_inputs, input_params):
+        return np.sum(graph_inputs) + input_params["test_input"]
 
-    input_parms = {}
-    input_parms["test_input"] = 5
+    input_params = {}
+    input_params["test_input"] = 5
     graph_reduce = reduce(
-        graph, my_sum, input_parms, mode="tree"
+        graph, my_sum, input_params, mode="tree"
     )  # mode "tree","single_node"
 
     assert dask.compute(graph_reduce)[0][0][0] == 44544495255.635056

@@ -144,8 +144,8 @@ def make_parallel_coord(coord: Union[Dict, xr.DataArray], n_chunks: int) -> Dict
     .. _parallel coord:
 
     Nomenclature used:
-    - ``dim_i``: The dimension name.
-    - ``n_dim_i_chunks``: Number of chunks into which the dimension coordinate ``dim_i`` has been divided.
+    - ``dim``: The dimension name.
+    - ``n_dim_chunks``: Number of chunks into which the dimension coordinate ``dim`` has been divided.
 
     The structure of a parallel coordinate::
 
@@ -154,22 +154,22 @@ def make_parallel_coord(coord: Union[Dict, xr.DataArray], n_chunks: int) -> Dict
                 'data_chunks': {
                     0 : 1D list/np.ndarray of Number,
                     ⋮
-                    n_dim_i_chunks-1 : ...,
+                    n_dim_chunks-1 : ...,
                 }
                 'data_chunk_edges': 1D list/np.ndarray of Number,
-                'dims': (dim_i,),
+                'dims': (dim,),
                 'attrs': measure attribute,
             }
 
     The keys with the following meanings:
 
     - ``data``: An array containing all the coordinate values associated with that dimension. These values do not necessarily have to match the values in the coordinates of the input data (dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_ or `processing_set <https://github.com/casangi/xradio/blob/main/src/xradio/vis/_processing_set.py>`_), as those are interpolated onto these values. The minimum and maximum values can be respectively larger or smaller than the values in the coordinates of individual `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_; this will simply exclude that data from being processed. It's important to note that the :ref:`parallel_coords <parallel coords>` and the input data coordinates must have the same `measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ (reference frame, units, etc.).
-    - ``data_chunks``: A dictionary where the data is broken into chunks with integer keys. This chunking determines the parallelism of the graph. The values in the chunks can overlap.
+    - ``data_chunks``: A dictionary where the values are chunks of the data and the keys are integers. This chunking determines the parallelism of the graph. The values in the chunks can overlap.
     - ``data_chunks_edges``: An array with the start and end values of each chunk.
     - ``dims``: The dimension coordinate name.
     - `attrs``: The `XRADIO measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ of the data.
 
-    Parallel coordinates can be combined into a single dictionary called the :ref:`parallel_coords <parallel coords>` where the keys are the coordinate dimension names (``dim_i``, see :func:`interpolate_data_coords_onto_parallel_coords` notes).
+    Parallel coordinates can be combined into a single dictionary called the :ref:`parallel_coords <parallel coords>` where the keys are the coordinate dimension names (``dim``, see :func:`interpolate_data_coords_onto_parallel_coords` notes).
     """
 
     if isinstance(coord, xr.core.dataarray.DataArray):
@@ -245,10 +245,10 @@ def interpolate_data_coords_onto_parallel_coords(
                 'data_chunks': {
                     0 : list/np.ndarray of Number,
                     ⋮
-                    n_dim_i_chunks-1 : ...,
+                    n_dim_0_chunks-1 : ...,
                 }
                 'data_chunk_edges': list/np.ndarray of Number,
-                'dims': tuple of str, #length 1
+                'dims': (dim_0,), 
                 'attrs': measure attribute,
             }
             ⋮
@@ -269,7 +269,7 @@ def interpolate_data_coords_onto_parallel_coords(
         node_task_data_mapping = {
             0 : {
                 'chunk_indices': tuple of int,
-                'parallel_dims': tuple of str,
+                'parallel_dims': (dim_0, ..., dim_{n_dims-1}),
                 'data_selection': {
                         dataset_name_0: {
                                 dim_0: slice,
@@ -277,9 +277,9 @@ def interpolate_data_coords_onto_parallel_coords(
                                 dim_(n_dims-1): slice
                         }
                         ⋮
-                        dataset_name_(n_dataset-1): ...
+                        dataset_name_{n_dataset-1}: ...
                 }
-                'task_coords': #Is a measures
+                'task_coords': 
                     dim_0:{
                         'data': list/np.ndarray of Number,
                         'dims': str,

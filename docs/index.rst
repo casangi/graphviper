@@ -1,11 +1,13 @@
 Graph Visibility and Image Parallel Execution Reduction
 =======================================================
 
-Documentation still under development.
+GraphVIPER is a `Dask <https://docs.dask.org/>`_ based MapReduce package. It allows for mapping a dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_ to `Dask graph nodes <https://docs.dask.org/en/latest/graphs.html>`_ followed by a reduce step.
 
-.. image:: _media/viper_logo.jpeg
-   :width: 250px
-   :align: left
+**GraphVIPER is in development and breaking API changes will happen.**
+
+The best place to start with GraphVIPER is doing the `graph building tutorial <https://graphviper.readthedocs.io/en/latest/graph_building_tutorial.html>`_ .
+
+`GitHub repository link <https://github.com/casangi/graphviper>`_
 
 .. toctree::
    :hidden:
