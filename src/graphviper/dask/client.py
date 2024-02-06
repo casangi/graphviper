@@ -17,14 +17,14 @@ from typing import Union, Dict
 
 @parameter.validate()
 def local_client(
-        cores: int = None,
-        memory_limit: str = None,
-        autorestrictor: bool = False,
-        dask_local_dir: str = None,
-        local_dir: str = None,
-        wait_for_workers: bool = True,
-        log_params: Union[None, Dict] = None,
-        worker_log_params: Union[None, Dict] = None
+    cores: int = None,
+    memory_limit: str = None,
+    autorestrictor: bool = False,
+    dask_local_dir: str = None,
+    local_dir: str = None,
+    wait_for_workers: bool = True,
+    log_params: Union[None, Dict] = None,
+    worker_log_params: Union[None, Dict] = None,
 ) -> distributed.Client:
     """ Setup dask cluster and logger.
 
@@ -58,24 +58,24 @@ def local_client(
 
     if log_params is None:
         log_params = {
-            'logger_name': "client",
-            'log_to_term': True,
-            'log_level': 'INFO',
-            'log_to_file': False,
-            'log_file': None
+            "logger_name": "client",
+            "log_to_term": True,
+            "log_level": "INFO",
+            "log_to_file": False,
+            "log_file": None,
         }
 
     if worker_log_params is None:
         worker_log_params = {
-            'logger_name': "worker",
-            'log_to_term': True,
-            'log_level': 'INFO',
-            'log_to_file': False,
-            'log_file': None
+            "logger_name": "worker",
+            "log_to_term": True,
+            "log_level": "INFO",
+            "log_to_file": False,
+            "log_file": None,
         }
 
     if local_dir:
-        os.environ['CLIENT_LOCAL_DIR'] = local_dir
+        os.environ["CLIENT_LOCAL_DIR"] = local_dir
         local_cache = True
 
     else:
@@ -84,8 +84,10 @@ def local_client(
     logger.setup_logger(**log_params)
 
     if dask_local_dir is None:
-        logger.warning(f"It is recommended that the local cache directory be set using "
-                       f"the {colorize.blue('dask_local_dir')} parameter.")
+        logger.warning(
+            f"It is recommended that the local cache directory be set using "
+            f"the {colorize.blue('dask_local_dir')} parameter."
+        )
 
     _set_up_dask(dask_local_dir)
 
@@ -94,16 +96,20 @@ def local_client(
     plugin_path = str(pathlib.Path(__file__).parent.resolve().joinpath("plugins/"))
 
     if local_cache or autorestrictor:
-        dask.config.set({
-            "distributed.scheduler.preload": os.path.join(plugin_path, 'scheduler.py')
-        })
+        dask.config.set(
+            {"distributed.scheduler.preload": os.path.join(plugin_path, "scheduler.py")}
+        )
 
-        dask.config.set({
-            "distributed.scheduler.preload-argv": [
-                "--local_cache", local_cache,
-                "--autorestrictor", autorestrictor
-            ]
-        })
+        dask.config.set(
+            {
+                "distributed.scheduler.preload-argv": [
+                    "--local_cache",
+                    local_cache,
+                    "--autorestrictor",
+                    autorestrictor,
+                ]
+            }
+        )
 
     # This method of assigning a worker plugin does not seem to work when using dask_jobqueue. Consequently, using \
     # client.register_worker_plugin so that the method of assigning a worker plugin is the same for local_client\
@@ -119,14 +125,16 @@ def local_client(
         cores = multiprocessing.cpu_count()
 
     if memory_limit is None:
-        memory_limit = str(round((psutil.virtual_memory().available / (1024 ** 2)) / cores)) + 'MB'
+        memory_limit = (
+            str(round((psutil.virtual_memory().available / (1024**2)) / cores)) + "MB"
+        )
 
     cluster = distributed.LocalCluster(
         n_workers=cores,
         threads_per_worker=1,
         processes=True,
         memory_limit=memory_limit,
-        silence_logs=logging.ERROR  # , silence_logs=logging.ERROR #,resources={ 'GPU': 2}
+        silence_logs=logging.ERROR,  # , silence_logs=logging.ERROR #,resources={ 'GPU': 2}
     )
 
     client = graphviper.dask.menrva.MenrvaClient(cluster)
@@ -143,33 +151,33 @@ def local_client(
             plugin="worker",
             name="worker_logger",
             local_cache=local_cache,
-            log_params=worker_log_params
+            log_params=worker_log_params,
         )
 
-    logger.info('Created client ' + str(client))
+    logger.info("Created client " + str(client))
 
     return client
 
 
 def slurm_cluster_client(
-        workers_per_node: int,
-        cores_per_node: int,
-        memory_per_node: str,
-        number_of_nodes: int,
-        queue: str,
-        interface: str,
-        python_env_dir: str,
-        dask_local_dir: str,
-        dask_log_dir: str,
-        exclude_nodes: str,
-        dashboard_port: int,
-        local_dir: str = None,
-        autorestrictor: bool = False,
-        wait_for_workers: bool = True,
-        log_params: Union[None, Dict] = None,
-        worker_log_params: Union[None, Dict] = None,
+    workers_per_node: int,
+    cores_per_node: int,
+    memory_per_node: str,
+    number_of_nodes: int,
+    queue: str,
+    interface: str,
+    python_env_dir: str,
+    dask_local_dir: str,
+    dask_log_dir: str,
+    exclude_nodes: str,
+    dashboard_port: int,
+    local_dir: str = None,
+    autorestrictor: bool = False,
+    wait_for_workers: bool = True,
+    log_params: Union[None, Dict] = None,
+    worker_log_params: Union[None, Dict] = None,
 ):
-    """ Creates a Dask slurm_cluster_client on a multinode cluster.
+    """Creates a Dask slurm_cluster_client on a multinode cluster.
 
         interface eth0, ib0
 
@@ -288,7 +296,7 @@ def slurm_cluster_client(
             plugin="worker",
             name="worker_logger",
             local_cache=local_cache,
-            log_params=worker_log_params
+            log_params=worker_log_params,
         )
 
     logger.info("Created client " + str(client))

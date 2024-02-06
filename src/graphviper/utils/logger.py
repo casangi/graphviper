@@ -80,23 +80,39 @@ class ColorLoggingFormatter(logging.Formatter):
     colorize = Colorize()
 
     function = " [{function}] ".format(function=colorize.blue("%(funcName)s"))
-    verbose = " [{exechain}] ".format(exechain=colorize.blue("%(filename)s:%(lineno)s : %(module)s.%(funcName)s"))
+    verbose = " [{exechain}] ".format(
+        exechain=colorize.blue("%(filename)s:%(lineno)s : %(module)s.%(funcName)s")
+    )
 
     start_msg = "[{time}] ".format(time=colorize.purple("%(asctime)s"))
     middle_msg = "{level}".format(level="%(levelname)8s")
     execution_msg = " {name} [ {filename} ]: {exec_info}: ".format(
         name="%(name)10s",
         filename="%(filename)-20s",
-        exec_info=colorize.blue("%(callchain)-45s"))
+        exec_info=colorize.blue("%(callchain)-45s"),
+    )
 
     FORMATS = {
-        logging.DEBUG: start_msg + colorize.green(middle_msg) + colorize.grey("  %(name)10s: ") + " %(message)s",
-        logging.INFO: start_msg + colorize.blue(middle_msg) + colorize.grey("  %(name)10s: ") + " %(message)s ",
-        logging.WARNING: start_msg + colorize.orange(middle_msg) + colorize.grey("  %(name)10s: ") + " %(message)s ",
-        logging.ERROR: start_msg + colorize.red(middle_msg) + colorize.grey("  %(name)10s: ") + " %(message)s",
-        logging.CRITICAL: start_msg + colorize.format(
-            text=middle_msg, color=[220, 60, 20],
-            highlight=True) + colorize.grey("  %(name)10s: ") + " %(message)s",
+        logging.DEBUG: start_msg
+        + colorize.green(middle_msg)
+        + colorize.grey("  %(name)10s: ")
+        + " %(message)s",
+        logging.INFO: start_msg
+        + colorize.blue(middle_msg)
+        + colorize.grey("  %(name)10s: ")
+        + " %(message)s ",
+        logging.WARNING: start_msg
+        + colorize.orange(middle_msg)
+        + colorize.grey("  %(name)10s: ")
+        + " %(message)s ",
+        logging.ERROR: start_msg
+        + colorize.red(middle_msg)
+        + colorize.grey("  %(name)10s: ")
+        + " %(message)s",
+        logging.CRITICAL: start_msg
+        + colorize.format(text=middle_msg, color=[220, 60, 20], highlight=True)
+        + colorize.grey("  %(name)10s: ")
+        + " %(message)s",
     }
 
     def format(self, record):
@@ -107,14 +123,15 @@ class ColorLoggingFormatter(logging.Formatter):
 
 class LoggingFormatter(logging.Formatter):
     function = " [{function}] ".format(function="%(funcName)s")
-    verbose = " [{exechain}] ".format(exechain="%(filename)s:%(lineno)s : %(module)s.%(funcName)s")
+    verbose = " [{exechain}] ".format(
+        exechain="%(filename)s:%(lineno)s : %(module)s.%(funcName)s"
+    )
 
     start_msg = "[{time}] ".format(time="%(asctime)s")
     middle_msg = "{level}".format(level="%(levelname)8s")
     execution_msg = " {name} [ {filename} ]: {exec_info}: ".format(
-        name="%(name)10s",
-        filename="%(filename)-20s",
-        exec_info="%(callchain)-45s")
+        name="%(name)10s", filename="%(filename)-20s", exec_info="%(callchain)-45s"
+    )
 
     FORMATS = {
         logging.DEBUG: start_msg + middle_msg + "  %(name)10s: " + " %(message)s",
@@ -131,7 +148,6 @@ class LoggingFormatter(logging.Formatter):
 
 
 def get_logger(logger_name: Union[str, None] = None):
-
     if logger_name is None:
         logger_name = "logger"
 
@@ -149,12 +165,12 @@ def get_logger(logger_name: Union[str, None] = None):
             stream_handler = logging.StreamHandler(sys.stdout)
             stream_handler.setFormatter(ColorLoggingFormatter())
             logger.addHandler(stream_handler)
-            logger.setLevel(logging.getLevelName('INFO'))
+            logger.setLevel(logging.getLevelName("INFO"))
 
         return logger
 
     try:
-        logger = worker.plugins['worker_logger'].get_logger()
+        logger = worker.plugins["worker_logger"].get_logger()
 
         return logger
 
@@ -166,11 +182,11 @@ def get_logger(logger_name: Union[str, None] = None):
 
 
 def setup_logger(
-        logger_name: Union[str, None] = None,
-        log_to_term: bool = False,
-        log_to_file: bool = True,
-        log_file: str = 'logger',
-        log_level: str = 'INFO',
+    logger_name: Union[str, None] = None,
+    log_to_term: bool = False,
+    log_to_file: bool = True,
+    log_file: str = "logger",
+    log_level: str = "INFO",
 ):
     """To set up as many loggers as you want"""
     if logger_name is None:
@@ -187,7 +203,7 @@ def setup_logger(
         logger.addHandler(stream_handler)
 
     if log_to_file:
-        log_file = log_file + datetime.today().strftime('%Y%m%d_%H%M%S') + '.log'
+        log_file = log_file + datetime.today().strftime("%Y%m%d_%H%M%S") + ".log"
         log_handler = logging.FileHandler(log_file)
         log_handler.setFormatter(LoggingFormatter())
         logger.addHandler(log_handler)
@@ -203,12 +219,12 @@ def get_worker_logger_name(logger_name: Union[str, None] = None):
 
 
 def setup_worker_logger(
-        logger_name: str,
-        log_to_term: bool,
-        log_to_file: bool,
-        log_file: str,
-        log_level: str,
-        worker: dask.distributed.worker.Worker
+    logger_name: str,
+    log_to_term: bool,
+    log_to_file: bool,
+    log_file: str,
+    log_level: str,
+    worker: dask.distributed.worker.Worker,
 ):
     parallel_logger_name = "_".join((logger_name, str(worker.name)))
 
@@ -221,7 +237,14 @@ def setup_worker_logger(
         logger.addHandler(stream_handler)
 
     if log_to_file:
-        log_file = log_file + '_' + str(worker.name) + '_' + datetime.today().strftime('%Y%m%d_%H%M%S') + '.log'
+        log_file = (
+            log_file
+            + "_"
+            + str(worker.name)
+            + "_"
+            + datetime.today().strftime("%Y%m%d_%H%M%S")
+            + ".log"
+        )
         log_handler = logging.FileHandler(log_file)
         log_handler.setFormatter(LoggingFormatter())
         logger.addHandler(log_handler)

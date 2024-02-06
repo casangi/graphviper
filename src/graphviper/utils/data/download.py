@@ -4,7 +4,7 @@ import graphviper
 from typing import NoReturn
 
 
-def download(file: str, folder: str = '.') -> NoReturn:
+def download(file: str, folder: str = ".") -> NoReturn:
     """
         Download tool for data stored externally.
     Parameters

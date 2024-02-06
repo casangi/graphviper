@@ -69,7 +69,7 @@ class Scheduler(SchedulerPlugin):
         if self.local_cache:
             # Set the resource label to the ip of the node that the worker is on, so that tasks that require a
             # specific node can be assigned to the correct worker.
-            ip = worker[worker.rfind("/") + 1: worker.rfind(":")]
+            ip = worker[worker.rfind("/") + 1 : worker.rfind(":")]
             scheduler.add_resources(worker=worker, resources={ip: 1})
 
     def update_graph(self, scheduler, dsk=None, keys=None, restrictions=None, **kw):

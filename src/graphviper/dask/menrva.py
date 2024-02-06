@@ -32,7 +32,9 @@ class MenrvaClient(distributed.Client):
             logger.error("There was an error calling the function: {}".format(e))
 
     @staticmethod
-    def instantiate_module(plugin: str, plugin_file: str, *args: Tuple[Any], **kwargs: Dict[str, Any]) -> WorkerPlugin:
+    def instantiate_module(
+        plugin: str, plugin_file: str, *args: Tuple[Any], **kwargs: Dict[str, Any]
+    ) -> WorkerPlugin:
         """
 
         Args:
@@ -53,20 +55,20 @@ class MenrvaClient(distributed.Client):
             return MenrvaClient.call(plugin_instance, *args, **kwargs)
 
     def load_plugin(
-            self,
-            directory: str,
-            plugin: str,
-            name: str,
-            *args: Union[Tuple[Any], Any],
-            **kwargs: Union[Dict[str, Any], Any]
+        self,
+        directory: str,
+        plugin: str,
+        name: str,
+        *args: Union[Tuple[Any], Any],
+        **kwargs: Union[Dict[str, Any], Any],
     ):
-
         plugin_file = ".".join((plugin, "py"))
         if pathlib.Path(directory).joinpath(plugin_file).exists():
             plugin_instance = MenrvaClient.instantiate_module(
                 plugin=plugin,
                 plugin_file="/".join((directory, plugin_file)),
-                *args, **kwargs
+                *args,
+                **kwargs,
             )
             logger.debug(f"{plugin}")
             if sys.version_info.major == 3:
@@ -78,4 +80,6 @@ class MenrvaClient(distributed.Client):
             else:
                 logger.warning("Python version may not be supported.")
         else:
-            logger.error("Cannot find plugins directory: {}".format(colorize.red(directory)))
+            logger.error(
+                "Cannot find plugins directory: {}".format(colorize.red(directory))
+            )

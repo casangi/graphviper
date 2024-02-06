@@ -22,7 +22,7 @@ def is_notebook() -> bool:
         from IPython import get_ipython
 
         shell = get_ipython().__class__.__name__
-        if shell == 'ZMQInteractiveShell':
+        if shell == "ZMQInteractiveShell":
             return True
         else:
             raise ImportError
@@ -32,10 +32,10 @@ def is_notebook() -> bool:
 
 
 def validate(
-        config_dir: str = None,
-        custom_checker: Callable = None,
-        add_data_type: Any = None,
-        external_logger: Callable = None
+    config_dir: str = None,
+    custom_checker: Callable = None,
+    add_data_type: Any = None,
+    external_logger: Callable = None,
 ):
     def function_wrapper(function):
         @functools.wraps(function)
@@ -59,7 +59,7 @@ def validate(
                 custom_checker=custom_checker,
                 add_data_type=add_data_type,
                 external_logger=external_logger,
-                meta_data=meta_data
+                meta_data=meta_data,
             )
 
             return function(*args, **kwargs)
@@ -88,9 +88,15 @@ def config_search(root: str = "/", module_name=None) -> Union[None, str]:
     colorize = console.Colorize()
 
     if root == "/":
-        graphviper.utils.logger.warning("File search from root could take some time ...")
+        graphviper.utils.logger.warning(
+            "File search from root could take some time ..."
+        )
 
-    graphviper.utils.logger.info("Searching {} for configuration file, please wait ...".format(colorize.blue(root)))
+    graphviper.utils.logger.info(
+        "Searching {} for configuration file, please wait ...".format(
+            colorize.blue(root)
+        )
+    )
 
     for file in glob.glob("{root}/**".format(root=root), recursive=True):
         if module_name + ".param.json" in file:
@@ -102,12 +108,20 @@ def config_search(root: str = "/", module_name=None) -> Union[None, str]:
 
 def set_config_directory(path: str, create: bool = False) -> NoReturn:
     if pathlib.Path(path).exists():
-        graphviper.utils.logger.info("Setting configuration directory to [{path}]".format(path=path))
+        graphviper.utils.logger.info(
+            "Setting configuration directory to [{path}]".format(path=path)
+        )
         os.environ["VIPER_CONFIG_PATH"] = path
     else:
-        graphviper.utils.logger.info("The configuration directory [{path}] does not currently exist.".format(path=path))
+        graphviper.utils.logger.info(
+            "The configuration directory [{path}] does not currently exist.".format(
+                path=path
+            )
+        )
         if create:
-            graphviper.utils.logger.info("Creating empty configuration directory: {path}".format(path=path))
+            graphviper.utils.logger.info(
+                "Creating empty configuration directory: {path}".format(path=path)
+            )
             pathlib.Path(path).mkdir()
 
 
@@ -131,13 +145,13 @@ def verify_configuration(path: str, module: ModuleType) -> List[str]:
 
 
 def verify(
-        function: Callable,
-        args: Dict,
-        meta_data: Dict[str, Union[Optional[str], Any]],
-        config_dir: str = None,
-        add_data_type: Any = None,
-        custom_checker: Callable = None,
-        external_logger: Callable = None
+    function: Callable,
+    args: Dict,
+    meta_data: Dict[str, Union[Optional[str], Any]],
+    config_dir: str = None,
+    add_data_type: Any = None,
+    custom_checker: Callable = None,
+    external_logger: Callable = None,
 ) -> NoReturn:
     colorize = console.Colorize()
     function_name, module_name = meta_data.values()
@@ -156,8 +170,8 @@ def verify(
 
     graphviper.utils.logger.info(
         "Checking parameter values for {module}.{function}".format(
-            function=colorize.blue(function_name),
-            module=colorize.blue(module_name))
+            function=colorize.blue(function_name), module=colorize.blue(module_name)
+        )
     )
 
     module_path = get_path(function)
@@ -186,18 +200,27 @@ def verify(
         # If we can't find the configuration in the ENV path we will make a last ditch effort to find it in either src/,
         # if that exists or looking in the python site-packages/ directory before giving up.
         if not path:
-            logger.info("Failed to find module in VIPER_CONFIG_PATH ... attempting to check common directories ...")
+            logger.info(
+                "Failed to find module in VIPER_CONFIG_PATH ... attempting to check common directories ..."
+            )
             path = config_search(root=module_path, module_name=module_name)
 
             if not path:
                 logger.error(
-                    "{function}: Cannot find parameter configuration directory.".format(function=function_name))
+                    "{function}: Cannot find parameter configuration directory.".format(
+                        function=function_name
+                    )
+                )
                 assert False
 
     else:
         path = config_search(root=module_path, module_name=module_name)
         if not path:
-            logger.error("{function}: Cannot find parameter configuration directory.".format(function=function_name))
+            logger.error(
+                "{function}: Cannot find parameter configuration directory.".format(
+                    function=function_name
+                )
+            )
             assert False
 
     # Define parameter file name
@@ -213,9 +236,12 @@ def verify(
 
     # Make sure that required module is present
     if module_name not in module_config_list:
-        logger.error("Parameter file for {function} not found in {path}".format(
-            function=colorize.red(function_name), path="/".join((path, parameter_file))
-        ))
+        logger.error(
+            "Parameter file for {function} not found in {path}".format(
+                function=colorize.red(function_name),
+                path="/".join((path, parameter_file)),
+            )
+        )
 
         raise FileNotFoundError
 
@@ -223,8 +249,10 @@ def verify(
         schema = json.load(json_file)
 
     if function_name not in schema.keys():
-        logger.error("{function} not_found in parameter configuration files.".format(
-            function=colorize.format(function_name, color="red", bold=True))
+        logger.error(
+            "{function} not_found in parameter configuration files.".format(
+                function=colorize.format(function_name, color="red", bold=True)
+            )
         )
 
         raise KeyError
