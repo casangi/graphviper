@@ -111,7 +111,7 @@ def set_config_directory(path: str, create: bool = False) -> NoReturn:
         graphviper.utils.logger.info(
             "Setting configuration directory to [{path}]".format(path=path)
         )
-        os.environ["VIPER_CONFIG_PATH"] = path
+        os.environ["PARAMETER_CONFIG_PATH"] = path
     else:
         graphviper.utils.logger.info(
             "The configuration directory [{path}] does not currently exist.".format(
@@ -188,20 +188,20 @@ def verify(
     #
     # This should be set according to the same pattern as PATH in terminal, ie. PATH=$PATH:/path/new
     # the parsing code will expect this.
-    elif os.getenv("VIPER_CONFIG_PATH"):
-        for paths in os.getenv("VIPER_CONFIG_PATH").split(":"):
+    elif os.getenv("PARAMETER_CONFIG_PATH"):
+        for paths in os.getenv("PARAMETER_CONFIG_PATH").split(":"):
             result = config_search(root=paths, module_name=module_name)
             logger.debug("Result: {}".format(result))
             if result:
                 path = result
-                logger.debug("VIPER_CONFIG_PATH: {dir}".format(dir=result))
+                logger.debug("PARAMETER_CONFIG_PATH: {dir}".format(dir=result))
                 break
 
         # If we can't find the configuration in the ENV path we will make a last ditch effort to find it in either src/,
         # if that exists or looking in the python site-packages/ directory before giving up.
         if not path:
             logger.info(
-                "Failed to find module in VIPER_CONFIG_PATH ... attempting to check common directories ..."
+                "Failed to find module in PARAMETER_CONFIG_PATH ... attempting to check common directories ..."
             )
             path = config_search(root=module_path, module_name=module_name)
 
