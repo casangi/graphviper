@@ -173,8 +173,8 @@ def make_parallel_coord(coord: Union[Dict, xr.DataArray], n_chunks: int) -> Dict
     """
 
     if isinstance(coord, xr.core.dataarray.DataArray):
-        coord = coord.copy(deep=True).to_dict()
-
+        coord = coord.copy(deep=True).to_dict(data="array") #Deep copy so that we don't accidentally modify the xr.core.dataarray.DataArray. 
+       
     parallel_coord = {}
     parallel_coord["data"] = coord["data"]
 
