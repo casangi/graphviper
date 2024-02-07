@@ -20,9 +20,10 @@ def download(file: str, folder: str = ".", source="local") -> NoReturn:
     -------
         No return
     """
-
-    if not pathlib.Path(folder).exists():
-        pathlib.Path(folder).mkdir()
+    print(folder)
+    if not pathlib.Path(folder).resolve().exists():
+        graphviper.utils.logger.info(f"Creating path:{str(pathlib.Path(folder).resolve())}")
+        pathlib.Path(folder).resolve().mkdir()
 
     if source == "api":
         graphviper.utils.data.remote.download(file=file, folder=folder)
