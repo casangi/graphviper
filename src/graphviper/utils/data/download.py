@@ -20,7 +20,7 @@ def download(file: str, folder: str = ".", source="local") -> NoReturn:
     -------
         No return
     """
-    print(folder)
+    
     if not pathlib.Path(folder).resolve().exists():
         graphviper.utils.logger.info(f"Creating path:{str(pathlib.Path(folder).resolve())}")
         pathlib.Path(folder).resolve().mkdir()
