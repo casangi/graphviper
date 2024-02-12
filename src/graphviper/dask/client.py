@@ -234,7 +234,7 @@ def slurm_cluster_client(
         dask.config.set(
             {
                 "distributed.scheduler.preload": os.path.join(
-                    plugin_path, "plugins/scheduler.py"
+                    plugin_path, "scheduler.py"
                 )
             }
         )
