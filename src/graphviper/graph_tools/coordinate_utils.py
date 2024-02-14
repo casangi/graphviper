@@ -122,7 +122,7 @@ def make_frequency_coord(
     }
 
 
-def make_parallel_coord(coord: Union[Dict, xr.DataArray], n_chunks: int) -> Dict:
+def make_parallel_coord(coord: Union[Dict, xr.DataArray], n_chunks:Union[None, int]=None, gap: Union[None, float]=None) -> Dict:
     """Creates a single parallel coordinate from a `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ or a `xarray.DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_ with `measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_.
 
     This function only returns a single :ref:`parallel_coord <parallel coord>` to create :ref:`parallel_coords <parallel coords>` a dictionary must be created where the keys are the dimension coordinate names and the values are the respective :ref:`parallel_coord <parallel coord>`.
@@ -131,8 +131,12 @@ def make_parallel_coord(coord: Union[Dict, xr.DataArray], n_chunks: int) -> Dict
     ----------
     coord : Union[Dict, xr.DataArray]
         The input `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ or `xarray.DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_ with `measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_.
-    n_chunks : int
-        How many chunks to divide coord into.
+    n_chunks : Union[None, int]
+        If specified, how many chunks to divide coord into.
+    
+    gap : Union[None, float]
+        If specified, gaps in coordinate values greater than the given value will be used to split chunks in the coordinate.
+
 
     Returns
     -------
@@ -177,17 +181,41 @@ def make_parallel_coord(coord: Union[Dict, xr.DataArray], n_chunks: int) -> Dict
        
     parallel_coord = {}
     parallel_coord["data"] = coord["data"]
-
-    parallel_coord["data_chunks"] = _array_split(coord["data"], n_chunks)
-
-    parallel_coord["data_chunks_edges"] = _array_split_edges(
-        parallel_coord["data_chunks"]
-    )
-
+    if gap is None and n_chunks is not None:
+        parallel_coord["data_chunks"] = _array_split(coord["data"], n_chunks)
+        parallel_coord["data_chunks_edges"] = _array_split_edges(
+            parallel_coord["data_chunks"]
+        )
+    elif gap is not None and n_chunks is None:
+        coord_data = coord["data"]
+        if len(coord_data.shape)>1:
+            raise ValueError("Can only split one-dimensional array")
+        nx = len(coord_data)
+        dxs = coord_data[1:] - coord_data[:-1]
+        jumps0 = np.argwhere(dxs>gap).flatten()
+        jumps = [0]+list(jumps0) + [nx]
+        data_chunk_edges = []
+        data_chunks = {}
+        for i, rnge in enumerate(itertools.pairwise(jumps)):
+            i0, i1 = rnge
+            data_chunks[i] = coord_data[i0:i1]
+            data_chunk_edges.extend([coord_data[i0], coord_data[i1-1]])
+        parallel_coord['data_chunks'] = data_chunks
+        parallel_coord['data_chunk_edges'] = data_chunk_edges
+    else:
+        raise ValueError("Exactly one of n_chunks and gap must be specified")
     parallel_coord["dims"] = coord["dims"]
     parallel_coord["attrs"] = coord["attrs"]
     return parallel_coord
 
+def make_parallel_coord_by_gap(coord: Union[Dict, xr.DataArray],
+                               gap: float)-> Dict: 
+    if isinstance(coord, xr.core.dataarray.DataArray):
+        coord = coord.copy(deep=True).to_dict()
+    parallel_coord['data'] = coord_data
+    parallel_coord['dims'] = coord['dims']
+    parallel_coord['attrs'] = coord['attrs']
+    return parallel_coord
 
 def interpolate_data_coords_onto_parallel_coords(
     parallel_coords: dict,
