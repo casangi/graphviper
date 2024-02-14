@@ -208,15 +208,6 @@ def make_parallel_coord(coord: Union[Dict, xr.DataArray], n_chunks:Union[None, i
     parallel_coord["attrs"] = coord["attrs"]
     return parallel_coord
 
-def make_parallel_coord_by_gap(coord: Union[Dict, xr.DataArray],
-                               gap: float)-> Dict: 
-    if isinstance(coord, xr.core.dataarray.DataArray):
-        coord = coord.copy(deep=True).to_dict()
-    parallel_coord['data'] = coord_data
-    parallel_coord['dims'] = coord['dims']
-    parallel_coord['attrs'] = coord['attrs']
-    return parallel_coord
-
 def interpolate_data_coords_onto_parallel_coords(
     parallel_coords: dict,
     input_data: Union[Dict, processing_set],
