@@ -57,27 +57,30 @@ def local_client(
     colorize = console.Colorize()
 
     if log_params is None:
-        log_params = {
+        log_params = {}
+    
+    log_params = {**{
             "logger_name": "client",
             "log_to_term": True,
             "log_level": "INFO",
             "log_to_file": False,
             "log_file": None,
-        }
+        }, **log_params}
 
     if worker_log_params is None:
-        worker_log_params = {
-            "logger_name": "worker",
-            "log_to_term": True,
-            "log_level": "INFO",
-            "log_to_file": False,
-            "log_file": None,
-        }
+        worker_log_params = {}
+
+    worker_log_params = { **{
+        "logger_name": "worker",
+        "log_to_term": True,
+        "log_level": "INFO",
+        "log_to_file": False,
+        "log_file": None,
+    }, **worker_log_params}
 
     if local_dir:
         os.environ["CLIENT_LOCAL_DIR"] = local_dir
         local_cache = True
-
     else:
         local_cache = False
 
