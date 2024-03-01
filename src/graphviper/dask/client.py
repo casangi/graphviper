@@ -101,7 +101,7 @@ def local_client(
     }
 
     if worker_log_params is None:
-        log_params = {}
+        worker_log_params = {}
     
     worker_log_params = {
         **{
