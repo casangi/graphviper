@@ -25,11 +25,15 @@ def local_client(
     wait_for_workers: bool = True,
     log_params: Union[None, Dict] = None,
     worker_log_params: Union[None, Dict] = None,
-) -> distributed.Client:
+    serial_execution: bool = False
+) -> Union[distributed.Client, None]:
     """ Setup dask cluster and logger.
 
     Parameters
     ----------
+    serial_execution : bool
+        This is an option that forces dask to run in serial mode while also setting up the logger to work. This is
+        really only appropriate for debugging.
     cores : int
         Number of cores in Dask cluster, defaults to None
     memory_limit : str
@@ -49,6 +53,33 @@ def local_client(
         worker_log_params: Keys as same as log_params, default values given in `Additional \
         Information`_.
 
+    .. _Description:
+
+    ** _log_params **
+
+    The log_params (worker_log_params) dictionary stores initialization information for the logger and associated
+    workers. the following are the acceptable key: value pairs and their usage information.
+
+    log_params["logger_name"] : str
+        Defines the logger name to use
+    log_params["log_to_term"] : bool
+        Should messages log to the terminal output.
+    log_params["log_level"] : str
+        Defines logging level, valid options:
+            - DEBUG
+            - INFO
+            - WARNING
+            - ERROR
+            - CRITICAL
+
+        Only messages flagged as at the given level or below are logged.
+
+    log_params["log_to_file"] : str
+        Should messages log to file.
+
+    log_params["log_filee"] : str
+        Name of log file to create. If none is given, the file name 'logger' will be used.
+
     Returns
     -------
         Dask Distributed Client
@@ -58,7 +89,7 @@ def local_client(
 
     if log_params is None:
         log_params = {
-            "logger_name": "client",
+            "logger_name": "graphviper",
             "log_to_term": True,
             "log_level": "INFO",
             "log_to_file": False,
@@ -73,6 +104,10 @@ def local_client(
             "log_to_file": False,
             "log_file": None,
         }
+
+    # If the user wants to change the global logger name from the
+    # default value of graphviper
+    os.environ["VIPER_LOGGER_NAME"]=log_params["logger_name"]
 
     if local_dir:
         os.environ["CLIENT_LOCAL_DIR"] = local_dir
@@ -110,6 +145,20 @@ def local_client(
                 ]
             }
         )
+
+    if serial_execution:
+        # Override the default behavior for debugging purposes and run synchronous
+
+        #client = distributed.Client(
+        #    name=log_params['logger_name'],
+        #    synchronous=True
+        #)
+
+        dask.config.set(scheduler="synchronous")
+
+        logger.info("Running client in synchronous mode.")
+
+        return None
 
     # This method of assigning a worker plugin does not seem to work when using dask_jobqueue. Consequently, using \
     # client.register_worker_plugin so that the method of assigning a worker plugin is the same for local_client\
@@ -184,21 +233,83 @@ def slurm_cluster_client(
     Parameters
     ----------
     workers_per_node : int
+        Number of workers per node ...
+
     cores_per_node : int
+        Number of cores per node ...
+
     memory_per_node : str
+        Memory allocation per node ...
+
     number_of_nodes : int
+        Number of nodes ...
+
     queue : str
+        Destination queue for each worker job. Passed to #SBATCH -p option
+
     interface : str
+        Network interface like ‘eth0’ or ‘ib0’. This will be used both for the Dask scheduler and the Dask workers
+        interface. If you need a different interface for the Dask scheduler you can pass it through the
+        scheduler_options argument: interface=your_worker_interface,
+        scheduler_options={'interface': your_scheduler_interface}.
+
     python_env_dir : str
+        Python executable used to launch Dask workers. Defaults to the Python that is submitting these jobs.
+
     dask_local_dir : str
-    dask_log_dir : str
-    exclude_nodes : str
-    dashboard_port : int
+        Where Dask should store temporary files, defaults to None. If None Dask will use \
+        `./dask-worker-space`, defaults to None
+
     local_dir : str
+        Defines client local directory, defaults to None
+
+    dask_log_dir : str
+        Destination directory for dask log files.
+
+    exclude_nodes : str
+        Nodes to exclude.
+
+    dashboard_port : int
+        Port to use for dashboard connection.
+
     autorestrictor : bool
+        Boolean determining usage of autorestrictor plugin, defaults to False
+
     wait_for_workers : bool
+        Boolean determining usage of wait_for_workers option in dask, defaults to False
+
     log_params : dict
+        Dictionary containing parameters to using for logging.
+
     worker_log_params : dict
+        Dictionary containing parameters to using for worker logging.
+
+    .. _Description:
+
+    ** _log_params **
+
+    The log_params (worker_log_params) dictionary stores initialization information for the logger and associated
+    workers. the following are the acceptable key: value pairs and their usage information.
+
+    log_params["logger_name"] : str
+        Defines the logger name to use
+    log_params["log_to_term"] : bool
+        Should messages log to the terminal output.
+    log_params["log_level"] : str
+        Defines logging level, valid options:
+            - DEBUG
+            - INFO
+            - WARNING
+            - ERROR
+            - CRITICAL
+
+        Only messages flagged as at the given level or below are logged.
+
+    log_params["log_to_file"] : str
+        Should messages log to file.
+
+    log_params["log_filee"] : str
+        Name of log file to create. If none is given, the file name 'logger' will be used.
 
     Returns
     -------

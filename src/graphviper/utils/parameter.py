@@ -175,7 +175,7 @@ def verify(
     )
 
     module_path = get_path(function)
-    logger.info(module_path)
+    logger.info(f"Module path: {colorize.blue(module_path)}")
 
     path = None
 
