@@ -156,12 +156,6 @@ def local_client(
 
     if serial_execution:
         # Override the default behavior for debugging purposes and run synchronous
-
-        #client = distributed.Client(
-        #    name=log_params['logger_name'],
-        #    synchronous=True
-        #)
-
         dask.config.set(scheduler="synchronous")
 
         logger.info("Running client in synchronous mode.")
@@ -183,7 +177,7 @@ def local_client(
 
     if memory_limit is None:
         memory_limit = (
-            str(round((psutil.virtual_memory().available / (1024**2)) / cores)) + "MB"
+            "".join((str(round((psutil.virtual_memory().available / (1024**2)) / cores)), "MB"))
         )
 
     cluster = distributed.LocalCluster(
