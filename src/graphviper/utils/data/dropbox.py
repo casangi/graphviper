@@ -108,6 +108,7 @@ def download(file: str, folder: str = ".") -> NoReturn:
                 bar.update(size)
 
     if zipfile.is_zipfile(fullname):
+        logger.info(f"Extracting file: {fullname} ...")
         shutil.unpack_archive(filename=fullname, extract_dir=folder)
 
         # Let's clean up after ourselves

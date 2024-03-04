@@ -16,6 +16,10 @@
             "type": ["boolean"],
             "nullable": true
         },
+        "serial_execution": {
+            "type": ["boolean"],
+            "nullable": true
+        },
         "memory_limit":{
             "type":["str"],
             "nullable": true

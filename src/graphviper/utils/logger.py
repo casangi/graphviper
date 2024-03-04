@@ -149,7 +149,7 @@ class LoggingFormatter(logging.Formatter):
 
 def get_logger(logger_name: Union[str, None] = None):
     if logger_name is None:
-        logger_name = "logger"
+        logger_name = "graphviper"
 
     try:
         worker = get_worker()
@@ -190,7 +190,7 @@ def setup_logger(
 ):
     """To set up as many loggers as you want"""
     if logger_name is None:
-        logger_name = "logger"
+        logger_name = "graphviper"
 
     logger = logging.getLogger(logger_name)
     logger.setLevel(logging.getLevelName(log_level))
