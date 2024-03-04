@@ -89,9 +89,8 @@ def local_client(
 
     if log_params is None:
         log_params = {}
-        
-    log_params = {
-        **{
+    
+    log_params = {**{
             "logger_name": "client",
             "log_to_term": True,
             "log_level": "INFO",
@@ -120,7 +119,6 @@ def local_client(
     if local_dir:
         os.environ["CLIENT_LOCAL_DIR"] = local_dir
         local_cache = True
-
     else:
         local_cache = False
 
