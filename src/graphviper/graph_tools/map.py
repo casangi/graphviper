@@ -9,6 +9,7 @@ import graphviper.utils.logger as logger
 from typing import Dict, Union
 from typing import Callable, Any, Tuple, List
 from xradio.vis._processing_set import processing_set
+import copy
 
 
 def map(
@@ -87,10 +88,10 @@ def map(
         nodes_ip_list,
     ) = _local_cache_configuration(n_tasks, client, date_time)
 
-    graph_list = []
+    input_param_list = []
     # Create a node in Dask graph for each task_id in node_task_data_mapping
     for task_id, node_task_parameters in node_task_data_mapping.items():
-        logger.debug(task_id, node_task_parameters.keys())
+        logger.debug(str(task_id) + str(node_task_parameters.keys()))
 
         input_params.update(node_task_parameters)
         input_params["task_id"] = task_id
@@ -111,8 +112,11 @@ def map(
             #    graph_list.append(dask.delayed(node_task)(dask.delayed(input_params)))    
         else:
             input_params["date_time"] = None
-        graph_list.append({'node_task' : node_task,'input_params' : input_params})
-    return {'map' : graph_list}
+        input_param_list.append(copy.deepcopy(input_params))
+
+    graph = {'map':{'node_task':node_task,'input_params':input_param_list}}
+
+    return graph
 
 def _select_data(input_data, data_selection):
     if isinstance(input_data, processing_set):

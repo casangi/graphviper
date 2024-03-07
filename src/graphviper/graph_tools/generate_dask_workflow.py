@@ -23,8 +23,8 @@ def _single_node(graph, reduce_node_task, input_params):
 def generate_dask_workflow(viper_graph):
 
     dask_graph = []
-    for node in viper_graph['map']:
-        dask_graph.append(dask.delayed(node['node_task'])(dask.delayed(node['input_params'])))    
+    for input_params in viper_graph['map']['input_params']:
+        dask_graph.append(dask.delayed(viper_graph['map']['node_task'])(dask.delayed(input_params)))    
 
     if 'reduce' in viper_graph:
         if viper_graph['reduce']['mode'] == "tree":
