@@ -107,14 +107,12 @@ def map(
             input_params["viper_local_dir"] = viper_local_dir
             node_ip = nodes_ip_list[tasks_to_node_map[task_id]]
             input_params["node_ip"] = node_ip
-            with dask.annotate(resources={node_ip: 1}):
-                graph_list.append(dask.delayed(node_task)(dask.delayed(input_params)))
+            #with dask.annotate(resources={node_ip: 1}):
+            #    graph_list.append(dask.delayed(node_task)(dask.delayed(input_params)))    
         else:
             input_params["date_time"] = None
-            graph_list.append(dask.delayed(node_task)(dask.delayed(input_params)))
-
-    return graph_list, input_params["date_time"]
-
+        graph_list.append({'node_task' : node_task,'input_params' : input_params})
+    return {'map' : graph_list}
 
 def _select_data(input_data, data_selection):
     if isinstance(input_data, processing_set):
