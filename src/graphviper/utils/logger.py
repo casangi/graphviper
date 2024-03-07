@@ -35,6 +35,27 @@ def info(message: str, verbose: bool = False):
     logger = get_logger(logger_name=logger_name)
     logger.info(message)
 
+def log(message: str, verbose: bool = False):
+    logger_name = os.getenv("VIPER_LOGGER_NAME")
+
+    if verbose:
+        message = add_verbose_info(message=message, color="blue")
+
+    logger = get_logger(logger_name=logger_name)
+
+    logger.log(logger.level, message)
+
+
+def exception(message: str, verbose: bool = False):
+    logger_name = os.getenv("VIPER_LOGGER_NAME")
+
+    if verbose:
+        message = add_verbose_info(message=message, color="blue")
+
+    logger = get_logger(logger_name=logger_name)
+
+    logger.exception(message)
+
 
 def debug(message: str, verbose: bool = False):
     logger_name = os.getenv("VIPER_LOGGER_NAME")
@@ -149,7 +170,11 @@ class LoggingFormatter(logging.Formatter):
 
 def get_logger(logger_name: Union[str, None] = None):
     if logger_name is None:
-        logger_name = "graphviper"
+        if os.getenv("VIPER_LOGGER_NAME"):
+            # Return default logger from env if none is specified.
+            logger_name = os.getenv("VIPER_LOGGER_NAME")
+        else:
+            logger_name = "graphviper"
 
     try:
         worker = get_worker()
