@@ -1,18 +1,87 @@
-import psutil
-import multiprocessing
-import dask
-import os
-import dask_jobqueue
 import logging
+import multiprocessing
+import os
 import pathlib
+from importlib.util import find_spec
+from importlib import import_module
+from typing import Dict, Union
+
+import dask
+import dask_jobqueue
 import distributed
+import psutil
+
 import graphviper.dask.menrva
-
-import graphviper.utils.parameter as parameter
-import graphviper.utils.logger as logger
 import graphviper.utils.console as console
+import graphviper.utils.logger as logger
+import graphviper.utils.parameter as parameter
 
-from typing import Union, Dict
+colorize = console.Colorize()
+
+def load_library_if_available(
+    name: str,
+    libs: Union[str, list[str]]
+) -> dict[str, bool]:
+    """Load libraries, if these are enabled.
+
+    Parameters
+    ----------
+    name : library group name
+        A group or a function name of the library will be imported.
+    libs : Union[str, list[str]]
+        library names to import
+
+    Returns
+    -------
+        an item of dict has the name and the flag whether all libraries were loaded successfully.
+    """
+    def _load_library(_lib):
+        if find_spec(_lib) is not None:
+            import_module(_lib)
+            return [True, f"   {colorize.blue(_lib)} is available"]
+        else:
+            return [False, f"   {colorize.blue(_lib)} is unavailable"]
+
+    if isinstance(libs, list):
+        _tmp = list(map(_load_library, libs))
+        _avail = [all([x[0] for x in _tmp]), [x[1] for x in _tmp]]
+    elif isinstance(libs, str):
+        _tmp = _load_library(libs)
+        _avail = [_tmp[0], [_tmp[1]]]
+    else:
+        _avail = [False, "   illegal module specification"]
+
+    _result = "Success" if _avail[0] else "Fail"
+    logger.info(f'Loading module: {name} -- {_result}')
+    [logger.info(x) for x in _avail[1]]
+
+    return {name: _avail[0]}
+
+
+def print_libraries_availability(spec: dict[str, bool]):
+    """Print contents of available_specs.
+
+    Parameters
+    ----------
+    spec : dict[str, bool]
+        an instance of available_specs
+    """
+    loaded_lib = [ k for k, v in spec.items() if v ]
+    logger.info(f"{colorize.yellow('Available functions of this environment')}: {', '.join(loaded_lib)}")
+
+
+"""
+load libraries related functions of a distributed environment
+'available_specs' contains the function name and a flag that the function was loaded successfully 
+"""
+
+logger.info(colorize.yellow("Checking functions availability:"))
+available_specs = {
+    **load_library_if_available("slurm", "dask_jobqueue"),
+    **load_library_if_available("dask_ssh", ["asyncssh", "jupyter_server_proxy", "paramiko"]),
+    **load_library_if_available("CUDA", "dask_cuda")
+}
+print_libraries_availability(available_specs)
 
 
 @parameter.validate()
