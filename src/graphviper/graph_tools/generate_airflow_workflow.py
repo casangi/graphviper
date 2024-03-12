@@ -5,6 +5,27 @@ def generate_airflow_workflow(viper_graph,dag_id='0',schedule_interval=None,file
     map_node_task_name = viper_graph['map']['node_task'].__name__
     map_input_params = str(viper_graph['map']['input_params'])
 
+    reduce_code_str=''
+    if 'reduce' in viper_graph:
+        reduce_mode = viper_graph['reduce']['mode']
+        reduce_input_params = str(viper_graph['reduce']['input_params'])
+        reduce_node_task_name = viper_graph['reduce']['node_task'].__name__
+
+        if reduce_mode == 'single_node':
+            reduce_mode_code_str=f'''
+    {reduce_node_task_name}(map_results_list,{reduce_input_params})
+            '''
+        else:
+            assert False, "Usupported reduce mode."
+
+        reduce_node_task_str = inspect.getsource(viper_graph['reduce']['node_task']).replace('\n','\n    ')
+        reduce_code_str=f'''
+    @task
+    {reduce_node_task_str}
+    {reduce_mode_code_str}
+        '''
+
+
     #print(len(viper_graph['map']['input_params']))
     #print(viper_graph['map']['input_params'])
     #print(repr(map_node_task_str))
@@ -27,13 +48,35 @@ def {dag_name}():
     {map_node_task_str}
 
     from numpy import array
-    added_values = {map_node_task_name}.expand(input_params={map_input_params})
+    map_results_list = {map_node_task_name}.expand(input_params={map_input_params})
 
+    {reduce_code_str}
+        
 {dag_name}()
     '''
 
     airflow_dag_file = open(filename, 'w')
     airflow_dag_file.write(python_code_string)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
     #for i, node in enumerate(viper_graph['map']):
