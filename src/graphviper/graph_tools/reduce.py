@@ -28,31 +28,9 @@ def reduce(
     list
         List of a single `dask.delayed <https://docs.dask.org/en/latest/delayed-api.html>`_ objects that represent the ``reduce`` Dask graph.
     """
-    graph_reduced = None
-
     if mode == "tree":
-        graph_reduced = _tree_combine(graph[0], reduce_node_task, input_params)
+        graph['reduce'] = {'mode':'tree','node_task':reduce_node_task,'input_params':input_params}
     elif mode == "single_node":
-        graph_reduced = _single_node(graph[0], reduce_node_task, input_params)
+        graph['reduce'] = {'mode':'single_node','node_task':reduce_node_task,'input_params':input_params}
 
-    return [graph_reduced, graph[1]]
-
-
-def _tree_combine(list_to_combine, reduce_node_task, input_params):
-    while len(list_to_combine) > 1:
-        new_list_to_combine = []
-        for i in range(0, len(list_to_combine), 2):
-            if i < len(list_to_combine) - 1:
-                lazy = dask.delayed(reduce_node_task)(
-                    [list_to_combine[i], list_to_combine[i + 1]],
-                    input_params,
-                )
-            else:
-                lazy = list_to_combine[i]
-            new_list_to_combine.append(lazy)
-        list_to_combine = new_list_to_combine
-    return list_to_combine
-
-
-def _single_node(graph, reduce_node_task, input_params):
-    return dask.delayed(reduce_node_task)(graph, input_params)
+    return graph

@@ -4,6 +4,7 @@ def test_map_reduce():
     from graphviper.graph_tools.coordinate_utils import (
         interpolate_data_coords_onto_parallel_coords,
     )
+    from graphviper.graph_tools.generate_dask_workflow import generate_dask_workflow
     import dask
 
     from graphviper.dask.client import local_client
@@ -86,11 +87,12 @@ def test_map_reduce():
         graph, my_sum, input_params, mode="tree"
     )  # mode "tree","single_node"
 
-    assert dask.compute(graph_reduce)[0][0][0] == 44544495255.635056
+    dask_graph = generate_dask_workflow(graph_reduce)
+    assert dask.compute(dask_graph)[0][0] == 44544495255.635056
     viper_client.close()
 
-
-test_map_reduce()
+if __name__ == '__main__':
+    test_map_reduce()
 
 
 """
