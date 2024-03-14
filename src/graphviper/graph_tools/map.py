@@ -118,6 +118,7 @@ def map(
 
     return graph
 
+
 def _select_data(input_data, data_selection):
     if isinstance(input_data, processing_set):
         input_data_sel = processing_set()

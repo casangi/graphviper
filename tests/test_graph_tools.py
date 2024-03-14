@@ -1,15 +1,15 @@
-def test_map_reduce():
+import pathlib
+
+import pytest
+
+
+@pytest.fixture
+def graph_reduce():
     from graphviper.utils.data import download
     from graphviper.graph_tools.map import map
     from graphviper.graph_tools.coordinate_utils import (
         interpolate_data_coords_onto_parallel_coords,
     )
-    from graphviper.graph_tools.generate_dask_workflow import generate_dask_workflow
-    import dask
-
-    from graphviper.dask.client import local_client
-
-    viper_client = local_client(cores=2, memory_limit="3GB", autorestrictor=True)
 
     ps_store = "Antennae_North.cal.lsrk.split.vis.zarr"
     download(file=ps_store)
@@ -86,17 +86,44 @@ def test_map_reduce():
         "test_input": 5
     }
 
-    graph_reduce = reduce(
-        graph, my_sum, input_params, mode="tree"
+    return reduce(
+        graph, my_sum, input_params, mode="single_node"
     )  # mode "tree","single_node"
+
+
+def test_map_reduce(graph_reduce):
+    from graphviper.dask.client import local_client
+
+    from graphviper.graph_tools.generate_dask_workflow import generate_dask_workflow
+    import dask
+
+    viper_client = local_client(cores=2, memory_limit="3GB", autorestrictor=True)
 
     dask_graph = generate_dask_workflow(graph_reduce)
 
     assert dask.compute(dask_graph)[0] == 44544495255.635056
 
 
+
+def test_airflow(graph_reduce, tmp_path: pathlib.Path):
+    from graphviper.graph_tools.generate_airflow_workflow import generate_airflow_workflow
+    filename = tmp_path / "airflow.py"
+    generate_airflow_workflow(graph_reduce, filename=filename)
+
+    # at the moment, the best I can do is find out if it exists
+    assert filename.exists()
+
+
+def test_prefect(graph_reduce, tmp_path: pathlib.Path):
+    from graphviper.graph_tools.generate_prefect_workflow import generate_prefect_workflow
+    filename = tmp_path / "prefect.py"
+    generate_prefect_workflow(graph_reduce, filename=filename)
+
+    # at the moment, the best I can do is find out if it exists
+    assert filename.exists()
+
 if __name__ == '__main__':
-    test_map_reduce()
+    test_map_reduce(graph_reduce())
 
 """
 chunk_indx 0 (0, 0)
