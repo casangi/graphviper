@@ -325,12 +325,17 @@ def interpolate_data_coords_onto_parallel_coords(
                 pc["data_chunks_edges"] = _array_split_edges(pc["data_chunks"])
 
             interp_index = interpolator(pc["data_chunks_edges"]).astype(int)
-            i = 0
 
+            i = 0
             # Split the interp_index for each chunk and fix any boundary issues.
             for chunk_index in sorted(pc["data_chunks"].keys()):
                 if interp_index[i] == -1 and interp_index[i + 1] == -1:
                     chunk_indx_start_stop[chunk_index] = slice(None)
+                    if (pc["data_chunks_edges"][i] < input_data[xds_name][dim][0])  and (pc["data_chunks_edges"][i+1] > input_data[xds_name][dim][-1]):
+                        interp_index[i] = 0
+                        interp_index[i+1] = -2 
+                        chunk_indx_start_stop[chunk_index] = slice(
+                        interp_index[i], interp_index[i + 1] + 1)
                 else:
                     if interp_index[i] == -1:
                         interp_index[i] = 0
@@ -391,7 +396,8 @@ def interpolate_data_coords_onto_parallel_coords(
             if (
                 empty_chunk
             ):  # The xds with xds_name has no data for the parallel chunk (no slice on one of the dims).
-                node_task_data_mapping[task_id]["data_selection"][xds_name] = None
+                del node_task_data_mapping[task_id]["data_selection"][xds_name] 
+                #node_task_data_mapping[task_id]["data_selection"][xds_name] = None
 
     return node_task_data_mapping
 
