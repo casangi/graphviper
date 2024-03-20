@@ -11,13 +11,13 @@ def test_map_reduce():
 
     viper_client = local_client(cores=2, memory_limit="3GB", autorestrictor=True)
 
-    ps_name = "Antennae_North.cal.lsrk.split.vis.zarr"
-    download(file=ps_name)
+    ps_store = "Antennae_North.cal.lsrk.split.vis.zarr"
+    download(file=ps_store)
 
     from xradio.vis.read_processing_set import read_processing_set
 
     ps = read_processing_set(
-        ps_name=ps_name,
+        ps_store=ps_store,
         intents=["OBSERVE_TARGET#ON_SOURCE"],
         fields=None,
     )
@@ -43,7 +43,7 @@ def test_map_reduce():
 
         # print(input_params.keys())
         ps = load_processing_set(
-            ps_name=input_params["input_data_store"],
+            ps_store=input_params["input_data_store"],
             sel_parms=input_params["data_selection"],
         )
         test_sum = 0
@@ -60,7 +60,7 @@ def test_map_reduce():
 
     input_params = {}
     input_params["test_input"] = 42
-    input_params["input_data_store"] = ps_name
+    input_params["input_data_store"] = ps_store
     # print(input_params)
     node_task_data_mapping = interpolate_data_coords_onto_parallel_coords(
         parallel_coords, ps
