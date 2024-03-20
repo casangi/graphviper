@@ -7,7 +7,7 @@ import numpy as np
 import graphviper.utils.logger as logger
 
 from typing import Dict, Union
-from typing import Callable, Any, Tuple, List
+from typing import Callable, Any, Tuple, Dict
 from xradio.vis._processing_set import processing_set
 import copy
 
@@ -20,7 +20,7 @@ def map(
     in_memory_compute: bool = False,
     client=None,
     date_time: str = None,
-) -> list:
+) -> Dict:
     """Create a perfectly parallel graph where a node is generated for each item in the :ref:`node_task_data_mapping <node task data mapping>` using the function specified in the ``node_task`` parameter.
 
     Parameters
