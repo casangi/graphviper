@@ -1,3 +1,5 @@
+from . import remote
+
 from .download import download
 from .dropbox import is_notebook
 
