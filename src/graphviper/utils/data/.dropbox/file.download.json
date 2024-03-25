@@ -151,5 +151,10 @@
         "file": "VLBA_TL016B_split.ms.zip",
         "id": "5nrl3a7rgjimokgt7clcz",
         "rlkey": "0rzc84wnrlwkeb4sipy75leyr&d"
+    },
+    "combine_weight_array": {
+        "file": "combine_weight.npy",
+        "id": "9bim301n9mkegthx6bzwm",
+        "rlkey": "a5iooif3rvfaxgzrdtcb3j6n0&dl"
     }
 }
