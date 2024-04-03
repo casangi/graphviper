@@ -1,3 +1,31 @@
+import inspect
+
+from graphviper.graph_tools.graph import GraphVisitor, CallableNode, ReduceNode, MapNode
+
+
+class GraphToAirflow(GraphVisitor[None]):
+    def __init__(self, dag_id, schedule_interval, filename, dag_name):
+        self.dag_id = dag_id
+        self.schedule_interval = schedule_interval
+        self.filename = filename
+        self.dag_name = dag_name
+        self.functions = {}
+
+    def visit_map(self, map_node: MapNode):
+        pass
+
+    def visit_reduce(self, reduce_node: ReduceNode):
+        pass
+
+    def visit_callable(self, task: CallableNode):
+        self.functions[task.name] = task.source
+        return task.name
+
+def generate_airflow_workflow_new(viper_graph,dag_id='0',schedule_interval=None,filename='airflow_dag_test.py',dag_name='map_reduce'):
+    generator = GraphToAirflow(dag_id, schedule_interval, dag_name)
+    # TBD
+
+
 def generate_airflow_workflow(viper_graph,dag_id='0',schedule_interval=None,filename='airflow_dag_test.py',dag_name='map_reduce'):
 
     import inspect

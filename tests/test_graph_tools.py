@@ -17,7 +17,7 @@ def test_map_reduce():
     from xradio.vis.read_processing_set import read_processing_set
 
     ps = read_processing_set(
-        ps_store=ps_store,
+        ps_name=ps_store,
         intents=["OBSERVE_TARGET#ON_SOURCE"],
         fields=None,
     )
@@ -43,7 +43,7 @@ def test_map_reduce():
 
         # print(input_params.keys())
         ps = load_processing_set(
-            ps_store=input_params["input_data_store"],
+            ps_name=input_params["input_data_store"],
             sel_parms=input_params["data_selection"],
         )
         test_sum = 0

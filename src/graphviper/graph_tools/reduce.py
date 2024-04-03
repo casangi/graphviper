@@ -1,14 +1,16 @@
 import dask
-from typing import Callable, Any
+from typing import Callable, Any, Union
 from typing import Dict, List
+
+from graphviper.graph_tools.graph import GraphNode, ReduceNode, CallableNode
 
 
 def reduce(
-    graph: list,
-    reduce_node_task: Callable[..., Any],
+    input: GraphNode,
+    reduce_operator: Union[Callable[..., Any],CallableNode],
     input_params: Dict,
     mode: {"tree", "single_node"} = "tree",
-) -> Dict:
+) -> ReduceNode:
     """Appends a reduce step to the graph created by the :func:`graphviper.graph_tools.map`. function.
 
     Parameters
@@ -28,9 +30,6 @@ def reduce(
     list
         List of a single `dask.delayed <https://docs.dask.org/en/latest/delayed-api.html>`_ objects that represent the ``reduce`` Dask graph.
     """
-    if mode == "tree":
-        graph['reduce'] = {'mode':'tree','node_task':reduce_node_task,'input_params':input_params}
-    elif mode == "single_node":
-        graph['reduce'] = {'mode':'single_node','node_task':reduce_node_task,'input_params':input_params}
-
-    return graph
+    if not isinstance(reduce_operator, CallableNode):
+        reduce_operator = CallableNode(reduce_operator)
+    return ReduceNode(input, reduce_operator, input_params, mode)

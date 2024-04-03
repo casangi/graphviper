@@ -11,16 +11,18 @@ from typing import Callable, Any, Tuple, Dict
 from xradio.vis._processing_set import processing_set
 import copy
 
+from graphviper.graph_tools.graph import MapNode, CallableNode
+
 
 def map(
     input_data: Union[Dict, processing_set],
     node_task_data_mapping: dict,
-    node_task: Callable[..., Any],
+    node_task: Union[Callable[..., Any], CallableNode],
     input_params: dict,
     in_memory_compute: bool = False,
     client=None,
     date_time: str = None,
-) -> Dict:
+) -> MapNode:
     """Create a perfectly parallel graph where a node is generated for each item in the :ref:`node_task_data_mapping <node task data mapping>` using the function specified in the ``node_task`` parameter.
 
     Parameters
@@ -76,6 +78,10 @@ def map(
     , where ``load_data`` is appropriate function for your data.
 
     """
+    # for convenience, convert a callable into a callable node here
+    if not isinstance(node_task, CallableNode):
+        node_task = CallableNode(node_task)
+
     n_tasks = len(node_task_data_mapping)
 
     # Get local_cache configuration if enabled in graphviper.dask.client.slurm_cluster_client.
@@ -114,9 +120,10 @@ def map(
             input_params["date_time"] = None
         input_param_list.append(copy.deepcopy(input_params))
 
-    graph = {'map':{'node_task':node_task,'input_params':input_param_list}}
+    graph = MapNode(node_task, input_param_list)
 
     return graph
+
 
 def _select_data(input_data, data_selection):
     if isinstance(input_data, processing_set):
