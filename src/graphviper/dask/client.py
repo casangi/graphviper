@@ -17,15 +17,15 @@ from typing import Union, Dict
 
 @parameter.validate()
 def local_client(
-    cores: int = None,
-    memory_limit: str = None,
-    autorestrictor: bool = False,
-    dask_local_dir: str = None,
-    local_dir: str = None,
-    wait_for_workers: bool = True,
-    log_params: Union[None, Dict] = None,
-    worker_log_params: Union[None, Dict] = None,
-    serial_execution: bool = False
+        cores: int = None,
+        memory_limit: str = None,
+        autorestrictor: bool = False,
+        dask_local_dir: str = None,
+        local_dir: str = None,
+        wait_for_workers: bool = True,
+        log_params: Union[None, Dict] = None,
+        worker_log_params: Union[None, Dict] = None,
+        serial_execution: bool = False
 ) -> Union[distributed.Client, None]:
     """ Setup dask cluster and logger.
 
@@ -89,19 +89,19 @@ def local_client(
 
     if log_params is None:
         log_params = {}
-    
+
     log_params = {**{
-            "logger_name": "client",
-            "log_to_term": True,
-            "log_level": "INFO",
-            "log_to_file": False,
-            "log_file": "client.log",
-        }, **log_params
-    }
+        "logger_name": "client",
+        "log_to_term": True,
+        "log_level": "INFO",
+        "log_to_file": False,
+        "log_file": "client.log",
+    }, **log_params
+                  }
 
     if worker_log_params is None:
         worker_log_params = {}
-    
+
     worker_log_params = {
         **{
             "logger_name": "worker",
@@ -114,7 +114,7 @@ def local_client(
 
     # If the user wants to change the global logger name from the
     # default value of graphviper
-    os.environ["VIPER_LOGGER_NAME"]=log_params["logger_name"]
+    os.environ["VIPER_LOGGER_NAME"] = log_params["logger_name"]
 
     if local_dir:
         os.environ["CLIENT_LOCAL_DIR"] = local_dir
@@ -175,7 +175,7 @@ def local_client(
 
     if memory_limit is None:
         memory_limit = (
-            "".join((str(round((psutil.virtual_memory().available / (1024**2)) / cores)), "MB"))
+            "".join((str(round((psutil.virtual_memory().available / (1024 ** 2)) / cores)), "MB"))
         )
 
     cluster = distributed.LocalCluster(
@@ -209,22 +209,22 @@ def local_client(
 
 
 def slurm_cluster_client(
-    workers_per_node: int,
-    cores_per_node: int,
-    memory_per_node: str,
-    number_of_nodes: int,
-    queue: str,
-    interface: str,
-    python_env_dir: str,
-    dask_local_dir: str,
-    dask_log_dir: str,
-    exclude_nodes: str,
-    dashboard_port: int,
-    local_dir: str = None,
-    autorestrictor: bool = False,
-    wait_for_workers: bool = True,
-    log_params: Union[None, Dict] = None,
-    worker_log_params: Union[None, Dict] = None,
+        workers_per_node: int,
+        cores_per_node: int,
+        memory_per_node: str,
+        number_of_nodes: int,
+        queue: str,
+        interface: str,
+        python_env_dir: str,
+        dask_local_dir: str,
+        dask_log_dir: str,
+        exclude_nodes: str,
+        dashboard_port: int,
+        local_dir: str = None,
+        autorestrictor: bool = False,
+        wait_for_workers: bool = True,
+        log_params: Union[None, Dict] = None,
+        worker_log_params: Union[None, Dict] = None,
 ):
     """Creates a Dask slurm_cluster_client on a multinode cluster.
 
