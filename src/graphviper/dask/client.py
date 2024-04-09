@@ -210,6 +210,7 @@ def local_client(
 
 def distributed_client(
         cluster: None,
+        dask_local_dir: str = None,
         log_params: Union[None, Dict] = None,
         worker_log_params: Union[None, Dict] = None,
 ) -> Union[distributed.Client, None]:
@@ -288,6 +289,14 @@ def distributed_client(
     os.environ["VIPER_LOGGER_NAME"] = log_params["logger_name"]
 
     logger.setup_logger(**log_params)
+
+    if dask_local_dir is None:
+        logger.warning(
+            f"It is recommended that the local cache directory be set using "
+            f"the {colorize.blue('dask_local_dir')} parameter."
+        )
+
+    _set_up_dask(dask_local_dir)
 
     # This will work as long as the scheduler path isn't in some outside directory. Being that it is a plugin specific
     # to this module, I think keeping it static in the module directory it good.
