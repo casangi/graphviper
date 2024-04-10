@@ -2,6 +2,7 @@ import pathlib
 import graphviper
 
 from typing import NoReturn
+from graphviper.utils.console import Colorize
 
 
 def download(file: str, folder: str = ".", source="local") -> NoReturn:
@@ -22,7 +23,9 @@ def download(file: str, folder: str = ".", source="local") -> NoReturn:
     """
     
     if not pathlib.Path(folder).resolve().exists():
-        graphviper.utils.logger.info(f"Creating path:{str(pathlib.Path(folder).resolve())}")
+        colorize = Colorize()
+
+        graphviper.utils.logger.info(f"Creating path:{colorize.blue(str(pathlib.Path(folder).resolve()))}")
         pathlib.Path(folder).resolve().mkdir()
 
     if source == "api":

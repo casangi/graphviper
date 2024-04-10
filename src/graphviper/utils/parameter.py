@@ -107,20 +107,21 @@ def config_search(root: str = "/", module_name=None) -> Union[None, str]:
 
 
 def set_config_directory(path: str, create: bool = False) -> NoReturn:
+    colorize = console.Colorize()
     if pathlib.Path(path).exists():
         graphviper.utils.logger.info(
-            "Setting configuration directory to [{path}]".format(path=path)
+            "Setting configuration directory to [{path}]".format(path=colorize.blue(path))
         )
         os.environ["PARAMETER_CONFIG_PATH"] = path
     else:
         graphviper.utils.logger.info(
             "The configuration directory [{path}] does not currently exist.".format(
-                path=path
+                path=colorize.blue(path)
             )
         )
         if create:
             graphviper.utils.logger.info(
-                "Creating empty configuration directory: {path}".format(path=path)
+                "Creating empty configuration directory: {path}".format(path=colorize.blue(path))
             )
             pathlib.Path(path).mkdir()
 
@@ -191,10 +192,10 @@ def verify(
     elif os.getenv("PARAMETER_CONFIG_PATH"):
         for paths in os.getenv("PARAMETER_CONFIG_PATH").split(":"):
             result = config_search(root=paths, module_name=module_name)
-            logger.debug("Result: {}".format(result))
+            logger.debug("Result: {}".format(colorize.blue(result)))
             if result:
                 path = result
-                logger.debug("PARAMETER_CONFIG_PATH: {dir}".format(dir=result))
+                logger.debug("PARAMETER_CONFIG_PATH: {dir}".format(dir=colorize.blue(result)))
                 break
 
         # If we can't find the configuration in the ENV path we will make a last ditch effort to find it in either src/,
