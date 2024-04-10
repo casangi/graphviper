@@ -88,7 +88,7 @@ def test_map_reduce():
     )  # mode "tree","single_node"
 
     dask_graph = generate_dask_workflow(graph_reduce)
-    assert dask.compute(dask_graph)[0][0] == 44544495255.635056
+    assert dask.compute(dask_graph)[0] == 44544495255.635056
     viper_client.close()
 
 if __name__ == '__main__':
