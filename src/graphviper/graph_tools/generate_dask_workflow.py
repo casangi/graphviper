@@ -13,7 +13,7 @@ def _tree_combine(list_to_combine, reduce_node_task, input_params):
                 lazy = list_to_combine[i]
             new_list_to_combine.append(lazy)
         list_to_combine = new_list_to_combine
-    return list_to_combine
+    return list_to_combine[0]
 
 
 def _single_node(graph, reduce_node_task, input_params):

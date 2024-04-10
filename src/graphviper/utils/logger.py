@@ -260,6 +260,10 @@ def setup_worker_logger(
         stream_handler = logging.StreamHandler(sys.stdout)
         stream_handler.setFormatter(ColorLoggingFormatter())
         logger.addHandler(stream_handler)
+         
+    import dask
+    logger.info('log_to_file '+log_file)
+    dask.distributed.print('log_to_file',log_to_file)
 
     if log_to_file:
         log_file = (
@@ -268,10 +272,14 @@ def setup_worker_logger(
             + str(worker.name)
             + "_"
             + datetime.today().strftime("%Y%m%d_%H%M%S")
-            + ".log"
+            + "_"
+            +  str(worker.ip)
+            +".log"
         )
         log_handler = logging.FileHandler(log_file)
         log_handler.setFormatter(LoggingFormatter())
         logger.addHandler(log_handler)
+        
+    logger.info('log_to_file '+log_file)
 
     return logger

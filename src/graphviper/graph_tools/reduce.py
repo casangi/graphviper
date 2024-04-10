@@ -4,7 +4,7 @@ from typing import Dict, List
 
 
 def reduce(
-    graph: list,
+    graph: Dict,
     reduce_node_task: Callable[..., Any],
     input_params: Dict,
     mode: {"tree", "single_node"} = "tree",
