@@ -30,5 +30,19 @@ def download(file: str, folder: str = ".", source="local") -> NoReturn:
 
     if source == "api":
         graphviper.utils.data.remote.download(file=file, folder=folder)
+
+    elif source == "threaded":
+        import concurrent.futures
+
+        if not isinstance(file, list):
+            file = [file]
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+            executor.map(
+                graphviper.utils.data.dropbox.download,
+                file
+            )
+
+
     else:
         graphviper.utils.data.dropbox.download(file=file, folder=folder)

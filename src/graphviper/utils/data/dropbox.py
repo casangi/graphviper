@@ -99,6 +99,7 @@ def download(file: str, folder: str = ".") -> NoReturn:
     else:
         from tqdm import tqdm
 
+    print(' ', end='', flush=True)
     with open(fullname, "wb") as fd, tqdm(
         desc=fullname, total=total, unit="iB", unit_scale=True, unit_divisor=1024
     ) as bar:
@@ -108,7 +109,7 @@ def download(file: str, folder: str = ".") -> NoReturn:
                 bar.update(size)
 
     if zipfile.is_zipfile(fullname):
-        logger.info(f"Extracting file: {colorize.blue(fullname)} ...")
+        #logger.info(f"Extracting file: {colorize.blue(fullname)} ...")
         shutil.unpack_archive(filename=fullname, extract_dir=folder)
 
         # Let's clean up after ourselves
