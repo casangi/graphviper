@@ -9,7 +9,7 @@ from typing import NoReturn
 from graphviper.utils.console import Colorize
 
 
-def download(file: str, folder: str = ".", source="local") -> NoReturn:
+def download(file: str, folder: str = ".", source="") -> NoReturn:
     """
         Download tool for data stored externally.
     Parameters
@@ -35,7 +35,10 @@ def download(file: str, folder: str = ".", source="local") -> NoReturn:
     if source == "api":
         graphviper.utils.data.remote.download(file=file, folder=folder)
 
-    elif source == "threaded":
+    elif source == "serial":
+        graphviper.utils.data.dropbox.download(file=file, folder=folder)
+
+    else:
 
         if not isinstance(file, list):
             file = [file]
@@ -52,9 +55,6 @@ def download(file: str, folder: str = ".", source="local") -> NoReturn:
                     f,
                     folder
                 )
-
-    else:
-        graphviper.utils.data.dropbox.download(file=file, folder=folder)
 
 
 def get_usable_threads(n_files: int) -> int:
