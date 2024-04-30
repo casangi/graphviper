@@ -19,6 +19,8 @@ dependencies = [
     'matplotlib',
     'numba>=0.57.0',
     'numpy<=1.25.0',
+    'psutil',
+    'ipywidgets',
     'prettytable',
     'pytest',
     'pytest-cov',
