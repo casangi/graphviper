@@ -44,7 +44,7 @@ def download(file: str, folder: str = ".", source="") -> NoReturn:
             file = [file]
 
         n_threads = get_usable_threads(len(file))
-        logger.debug(f"Initializing with {n_threads} threads.")
+        logger.info(f"Initializing with {n_threads} threads.")
 
         print_file_list(file)
 
@@ -58,11 +58,11 @@ def download(file: str, folder: str = ".", source="") -> NoReturn:
 
 
 def get_usable_threads(n_files: int) -> int:
-    import threading
 
-    available_threads = psutil.cpu_count(logical=True) - threading.active_count()
+    # Always leave a single thread resource
+    available_threads = psutil.cpu_count(logical=True) - 1
 
-    if available_threads > n_files:
+    if available_threads >= n_files:
         return n_files
 
     return int(available_threads)
