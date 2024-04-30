@@ -44,7 +44,7 @@ def download(file: str, folder: str = ".", source="") -> NoReturn:
             file = [file]
 
         n_threads = get_usable_threads(len(file))
-        logger.info(f"Initializing with {n_threads} threads.")
+        logger.debug(f"Initializing downloader with {n_threads} threads.")
 
         print_file_list(file)
 
