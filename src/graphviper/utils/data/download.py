@@ -41,7 +41,7 @@ def download(file: str, folder: str = ".", source="") -> NoReturn:
     else:
 
         if not isinstance(file, list):
-            file = [file]
+            file=[file]
 
         n_threads = get_usable_threads(len(file))
         logger.debug(f"Initializing downloader with {n_threads} threads.")
@@ -76,7 +76,7 @@ def print_file_list(files: list) -> NoReturn:
     console = Console()
     table = Table(show_header=True, box=box.SIMPLE)
 
-    table.add_column("Download List", justify="center")
+    table.add_column("Download List", justify="left")
 
     for file in files:
         table.add_row(f"[magenta]{file}[/magenta]")
