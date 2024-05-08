@@ -33,7 +33,8 @@ def is_notebook() -> bool:
 
 def download(file: str, folder: str = ".") -> NoReturn:
     """
-        Download tool for data stored on dropbox.
+        Download tool for data stored on dropbox. This is a simple prototype for downloading dropbox file configurations
+        from a remote api.
     Parameters
     ----------
     file : str

@@ -9,7 +9,7 @@ from typing import NoReturn
 from graphviper.utils.console import Colorize
 
 
-def download(file: str, folder: str = ".", source="") -> NoReturn:
+def download(file: str, folder: str = ".", source="", n_threads=None) -> NoReturn:
     """
         Download tool for data stored externally.
     Parameters
@@ -20,6 +20,8 @@ def download(file: str, folder: str = ".", source="") -> NoReturn:
         Destination folder.
     source : str
         File metadata source location.
+    n_threads : int
+        Number of threads to use.
 
     Returns
     -------
@@ -41,24 +43,25 @@ def download(file: str, folder: str = ".", source="") -> NoReturn:
     else:
 
         if not isinstance(file, list):
-            file=[file]
+            file = [file]
 
-        n_threads = get_usable_threads(len(file))
+        if n_threads is None:
+            n_threads = get_usable_threads(len(file))
+
         logger.debug(f"Initializing downloader with {n_threads} threads.")
 
         print_file_list(file)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=n_threads) as executor:
-            for f in file:
+            for _file in file:
                 executor.submit(
                     graphviper.utils.data.dropbox.download,
-                    f,
+                    _file,
                     folder
                 )
 
 
 def get_usable_threads(n_files: int) -> int:
-
     # Always leave a single thread resource
     available_threads = psutil.cpu_count(logical=True) - 1
 
