@@ -33,7 +33,7 @@ class MenrvaClient(distributed.Client):
 
     @staticmethod
     def instantiate_module(
-        plugin: str, plugin_file: str, *args: Tuple[Any], **kwargs: Dict[str, Any]
+            plugin: str, plugin_file: str, *args: Tuple[Any], **kwargs: Dict[str, Any]
     ) -> WorkerPlugin:
         """
 
@@ -55,12 +55,12 @@ class MenrvaClient(distributed.Client):
             return MenrvaClient.call(plugin_instance, *args, **kwargs)
 
     def load_plugin(
-        self,
-        directory: str,
-        plugin: str,
-        name: str,
-        *args: Union[Tuple[Any], Any],
-        **kwargs: Union[Dict[str, Any], Any],
+            self,
+            directory: str,
+            plugin: str,
+            name: str,
+            *args: Union[Tuple[Any], Any],
+            **kwargs: Union[Dict[str, Any], Any],
     ):
         plugin_file = ".".join((plugin, "py"))
         if pathlib.Path(directory).joinpath(plugin_file).exists():
@@ -83,3 +83,42 @@ class MenrvaClient(distributed.Client):
             logger.error(
                 "Cannot find plugins directory: {}".format(colorize.red(directory))
             )
+
+
+def port_is_free(port):
+    import socket
+    import errno
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    try:
+        s.bind(("127.0.0.1", port))
+    except socket.error as e:
+        if e.errno == errno.EADDRINUSE:
+            logger.error("Port is already in use")
+            return False
+        else:
+            # something else raised the socket.error exception
+            logger.exception(e)
+            return False
+
+    logger.debug("Socket is free.")
+    s.close()
+
+    return True
+
+
+def close_port(port):
+    import psutil
+    from psutil import process_iter
+    from signal import SIGKILL
+
+    for proc in process_iter():
+        try:
+            for conns in proc.connections(kind='inet'):
+                if conns.laddr.port == port:
+                    proc.send_signal(SIGKILL)
+                    continue
+
+        except psutil.AccessDenied:
+            pass
