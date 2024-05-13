@@ -22,6 +22,12 @@ class MenrvaClient(distributed.Client):
     plugin management and more extended features.
     """
 
+    def __new__(cls, *args, **kwargs):
+        if not hasattr(cls, '_instance'):
+            cls._instance = super(MenrvaClient, cls).__new__(cls)
+
+        return cls._instance
+
     @staticmethod
     def call(func: Callable, *args: Tuple[Any], **kwargs: Dict[str, Any]):
         try:
@@ -95,7 +101,7 @@ def port_is_free(port):
         s.bind(("127.0.0.1", port))
     except socket.error as e:
         if e.errno == errno.EADDRINUSE:
-            logger.error("Port is already in use")
+            logger.warning("Port is already in use.")
             return False
         else:
             # something else raised the socket.error exception

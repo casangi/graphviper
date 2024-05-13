@@ -13,6 +13,11 @@ import graphviper.utils.logger as logger
 import graphviper.utils.console as console
 
 from typing import Union, Dict
+from contextvars import ContextVar
+
+DEFAULT_DASK_CLIENT_PORT = 8787
+
+_current_client: ContextVar[distributed.Client | None] = ContextVar("_current_client", default=None)
 
 
 @parameter.validate()
@@ -45,6 +50,7 @@ def local_client(
         `./dask-worker-space`, defaults to None
     local_dir : str
         Defines client local directory, defaults to None
+
     wait_for_workers : bool
         Boolean determining usage of wait_for_workers option in dask, defaults to False
     log_params : dict
@@ -178,6 +184,9 @@ def local_client(
             "".join((str(round((psutil.virtual_memory().available / (1024 ** 2)) / cores)), "MB"))
         )
 
+    if not _current_client.get() is None:
+        return _current_client.get()
+
     cluster = distributed.LocalCluster(
         n_workers=cores,
         threads_per_worker=1,
@@ -204,6 +213,7 @@ def local_client(
         )
 
     logger.info("Created client " + str(client))
+    _current_client.set(client)
 
     return client
 
@@ -307,23 +317,24 @@ def distributed_client(
     logger.info("Created client " + str(client))
     return client
 
+
 def slurm_cluster_client(
-    workers_per_node: int,
-    cores_per_node: int,
-    memory_per_node: str,
-    number_of_nodes: int,
-    queue: str,
-    interface: str,
-    python_env_dir: str,
-    dask_local_dir: str,
-    dask_log_dir: str,
-    exclude_nodes: str="",
-    dashboard_port: int=8787,
-    local_dir: str = None,
-    autorestrictor: bool = False,
-    wait_for_workers: bool = True,
-    log_params: Union[None, Dict] = None,
-    worker_log_params: Union[None, Dict] = None,
+        workers_per_node: int,
+        cores_per_node: int,
+        memory_per_node: str,
+        number_of_nodes: int,
+        queue: str,
+        interface: str,
+        python_env_dir: str,
+        dask_local_dir: str,
+        dask_log_dir: str,
+        exclude_nodes: str = "",
+        dashboard_port: int = 8787,
+        local_dir: str = None,
+        autorestrictor: bool = False,
+        wait_for_workers: bool = True,
+        log_params: Union[None, Dict] = None,
+        worker_log_params: Union[None, Dict] = None,
 ):
     """Creates a Dask slurm_cluster_client on a multinode cluster.
 
