@@ -1,5 +1,5 @@
 import os
-
+import graphviper
 
 class TestGraphViperClient:
     @classmethod
@@ -27,27 +27,22 @@ class TestGraphViperClient:
         Run astrohack_local_client with N cores and with a memory_limit of M GB to create an instance of the
         astrohack Dask client.
         """
-        import distributed
 
         from graphviper.dask.client import local_client
-
-        DEFAULT_DASK_ADDRESS = "127.0.0.1:8786"
 
         log_params = {"log_level": "DEBUG"}
 
         client = local_client(cores=2, memory_limit="8GB", log_params=log_params)
 
-        if not distributed.client._get_global_client():
-            try:
-                distributed.Client(DEFAULT_DASK_ADDRESS, timeout=2)
+        try:
+            if graphviper.dask.client._current_client.get() is None:
+                raise OSError
 
-            except OSError:
-                assert False
+        except OSError:
+            assert False
 
-            finally:
-                client.shutdown()
-
-        client.shutdown()
+        finally:
+            client.shutdown()
 
     def test_client_dask_dir(self):
         """
@@ -59,15 +54,16 @@ class TestGraphViperClient:
 
         log_params = {"log_level": "DEBUG"}
 
+        path = os.getcwd()
         client = local_client(
             cores=2,
             memory_limit="8GB",
             log_params=log_params,
-            dask_local_dir="./dask_test_dir",
+            dask_local_dir=f"{path}/dask_test_dir",
         )
 
         try:
-            if os.path.exists("./dask_test_dir") is False:
+            if os.path.exists(f"{path}/dask_test_dir") is False:
                 raise FileNotFoundError
 
         except FileNotFoundError:
