@@ -15,8 +15,6 @@ import graphviper.utils.console as console
 from typing import Union, Dict
 from contextvars import ContextVar
 
-DEFAULT_DASK_CLIENT_PORT = 8787
-
 _current_client: ContextVar[distributed.Client | None] = ContextVar("_current_client", default=None)
 
 
