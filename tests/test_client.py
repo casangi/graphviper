@@ -53,17 +53,17 @@ class TestGraphViperClient:
         astrohack Dask client. Check that temporary files are written to dask_local_dir.
         """
 
-        log_params = {"log_level": "DEBUG"}
-
-        path = pathlib.Path(".").cwd() / "dask_test_dir"
-        client = local_client(
-            cores=2,
-            memory_limit="8GB",
-            log_params=log_params,
-            dask_local_dir=str(path),
-        )
-
         try:
+            log_params = {"log_level": "DEBUG"}
+
+            path = pathlib.Path(".").cwd() / "dask_test_dir"
+            client = local_client(
+                cores=2,
+                memory_limit="8GB",
+                log_params=log_params,
+                dask_local_dir=str(path),
+            )
+
             if path.exists() is False:
                 raise FileNotFoundError
 
@@ -85,7 +85,11 @@ class TestGraphViperClient:
             "log_file": "graphviper_log_file",
         }
 
-        client = local_client(cores=2, memory_limit="8GB", log_params=log_params)
+        client = local_client(
+            cores=2,
+            memory_limit="8GB",
+            log_params=log_params
+        )
 
         files = os.listdir(".")
 
