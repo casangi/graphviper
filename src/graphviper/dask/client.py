@@ -15,7 +15,7 @@ import graphviper.utils.console as console
 from typing import Union, Dict
 from contextvars import ContextVar
 
-_current_client: ContextVar[distributed.Client | None] = ContextVar("_current_client", default=None)
+_current_client: Union[ContextVar[distributed.Client], ContextVar[None]] = ContextVar("_current_client", default=None)
 
 
 @parameter.validate()

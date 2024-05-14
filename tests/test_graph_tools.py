@@ -49,19 +49,20 @@ def test_map_reduce():
         test_sum = 0
         for ms_xds in ps.values():
             test_sum = test_sum + ms_xds.frequency[-1].data / (
-                100
-                * (
-                    input_params["chunk_indices"][0]
-                    + input_params["chunk_indices"][1]
-                    + 1
-                )
+                    100
+                    * (
+                            input_params["chunk_indices"][0]
+                            + input_params["chunk_indices"][1]
+                            + 1
+                    )
             )
         return test_sum  # input_params["test_input"]
 
-    input_params = {}
-    input_params["test_input"] = 42
-    input_params["input_data_store"] = ps_store
-    # print(input_params)
+    input_params = {
+        "test_input": 42,
+        "input_data_store": ps_store
+    }
+
     node_task_data_mapping = interpolate_data_coords_onto_parallel_coords(
         parallel_coords, ps
     )
@@ -81,19 +82,22 @@ def test_map_reduce():
     def my_sum(graph_inputs, input_params):
         return np.sum(graph_inputs) + input_params["test_input"]
 
-    input_params = {}
-    input_params["test_input"] = 5
+    input_params = {
+        "test_input": 5
+    }
+
     graph_reduce = reduce(
         graph, my_sum, input_params, mode="tree"
     )  # mode "tree","single_node"
 
     dask_graph = generate_dask_workflow(graph_reduce)
+
     assert dask.compute(dask_graph)[0] == 44544495255.635056
     viper_client.shutdown()
 
+
 if __name__ == '__main__':
     test_map_reduce()
-
 
 """
 chunk_indx 0 (0, 0)
