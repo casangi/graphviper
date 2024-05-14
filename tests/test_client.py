@@ -1,5 +1,10 @@
 import os
+import re
+import pathlib
 import graphviper
+
+from graphviper.dask.client import local_client
+
 
 class TestGraphViperClient:
     @classmethod
@@ -28,8 +33,6 @@ class TestGraphViperClient:
         astrohack Dask client.
         """
 
-        from graphviper.dask.client import local_client
-
         log_params = {"log_level": "DEBUG"}
 
         client = local_client(cores=2, memory_limit="8GB", log_params=log_params)
@@ -50,20 +53,18 @@ class TestGraphViperClient:
         astrohack Dask client. Check that temporary files are written to dask_local_dir.
         """
 
-        from graphviper.dask.client import local_client
-
         log_params = {"log_level": "DEBUG"}
 
-        path = os.getcwd()
+        path = pathlib.Path(".").cwd() / "dask_test_dir"
         client = local_client(
             cores=2,
             memory_limit="8GB",
             log_params=log_params,
-            dask_local_dir=f"{path}/dask_test_dir",
+            dask_local_dir=str(path),
         )
 
         try:
-            if os.path.exists(f"{path}/dask_test_dir") is False:
+            if path.exists() is False:
                 raise FileNotFoundError
 
         except FileNotFoundError:
@@ -77,10 +78,6 @@ class TestGraphViperClient:
         Run astrohack_local_client with N cores and with a memory_limit of M GB without any errors and the messages
         will be logged in the terminal.
         """
-        import os
-        import re
-
-        from graphviper.dask.client import local_client
 
         log_params = {
             "log_level": "DEBUG",
