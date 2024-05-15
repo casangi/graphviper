@@ -17,6 +17,8 @@ from contextvars import ContextVar
 
 _current_client: Union[ContextVar[distributed.Client], ContextVar[None]] = ContextVar("_current_client", default=None)
 
+colorize = console.Colorize()
+
 
 @parameter.validate()
 def local_client(
@@ -88,8 +90,6 @@ def local_client(
     -------
         Dask Distributed Client
     """
-
-    colorize = console.Colorize()
 
     if log_params is None:
         log_params = {}
@@ -264,8 +264,6 @@ def distributed_client(
     -------
         Dask Distributed Client
     """
-
-    colorize = console.Colorize()
 
     if log_params is None:
         log_params = {}
