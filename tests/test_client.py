@@ -48,7 +48,7 @@ class TestGraphViperClient:
         """
 
         try:
-            if graphviper.dask.client._current_client.get() is None:
+            if graphviper.dask.menrva.current_client.get() is None:
                 raise OSError
 
         except OSError:
