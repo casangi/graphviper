@@ -93,7 +93,7 @@ def test_map_reduce():
     dask_graph = generate_dask_workflow(graph_reduce)
 
     assert dask.compute(dask_graph)[0] == 44544495255.635056
-    viper_client.shutdown()
+    #viper_client.shutdown()
 
 
 if __name__ == '__main__':
