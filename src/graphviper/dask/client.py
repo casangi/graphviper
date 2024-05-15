@@ -179,16 +179,23 @@ def local_client(
             "".join((str(round((psutil.virtual_memory().available / (1024 ** 2)) / cores)), "MB"))
         )
 
+    if not graphviper.dask.menrva.current_cluster.get() is None:
+        cluster = graphviper.dask.menrva.current_cluster.get()
+
+
+    else:
+        cluster = distributed.LocalCluster(
+            n_workers=cores,
+            threads_per_worker=1,
+            processes=True,
+            memory_limit=memory_limit,
+            silence_logs=logging.ERROR,  # , silence_logs=logging.ERROR #,resources={ 'GPU': 2}
+        )
+
+    graphviper.dask.menrva.current_cluster.set(cluster)
+
     if not graphviper.dask.menrva.current_client.get() is None:
         return graphviper.dask.menrva.current_client.get()
-
-    cluster = distributed.LocalCluster(
-        n_workers=cores,
-        threads_per_worker=1,
-        processes=True,
-        memory_limit=memory_limit,
-        silence_logs=logging.ERROR,  # , silence_logs=logging.ERROR #,resources={ 'GPU': 2}
-    )
 
     client = graphviper.dask.menrva.MenrvaClient(cluster)
     client.get_versions(check=True)

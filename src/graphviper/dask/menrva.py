@@ -10,14 +10,22 @@ import graphviper.utils.logger as logger
 import graphviper.utils.console as console
 
 from distributed.diagnostics.plugin import WorkerPlugin
+from distributed.utils import is_python_shutting_down
+from distributed.utils import sync
+from distributed.utils import NoOpAwaitable
+from distributed.utils import wait_for
+
+from dask.typing import NoDefault, no_default
+
+from contextvars import ContextVar
+from contextlib import suppress
 
 from typing import Callable, Tuple, Dict, Any, Union
 
 colorize = console.Colorize()
 
-from contextvars import ContextVar
-
-current_client: Union[ContextVar[distributed.Client], ContextVar[None]] = ContextVar("_current_client", default=None)
+current_client: Union[ContextVar[distributed.Client], ContextVar[None]] = ContextVar("current_client", default=None)
+current_cluster: Union[ContextVar[distributed.LocalCluster], ContextVar[None]] = ContextVar("current_cluster", default=None)
 
 
 class MenrvaClient(distributed.Client):
@@ -43,10 +51,56 @@ class MenrvaClient(distributed.Client):
                --------
                Client.close : close only this client
                """
-        print("Shutting down client")
         current_client.set(None)
+        current_cluster.set(None)
+
         return self.sync(self._shutdown)
 
+    def close(self, timeout=no_default):
+        """Close this client
+
+        Clients will also close automatically when your Python session ends
+
+        If you started a client without arguments like ``Client()`` then this
+        will also close the local cluster that was started at the same time.
+
+
+        Parameters
+        ----------
+        timeout : number
+            Time in seconds after which to raise a
+            ``dask.distributed.TimeoutError``
+
+        See Also
+        --------
+        Client.restart
+        """
+        current_client.set(None)
+
+        if timeout is no_default:
+            timeout = self._timeout * 2
+        # XXX handling of self.status here is not thread-safe
+        if self.status in ["closed", "newly-created"]:
+            if self.asynchronous:
+                return NoOpAwaitable()
+            return
+        self.status = "closing"
+
+        with suppress(AttributeError):
+            for pc in self._periodic_callbacks.values():
+                pc.stop()
+
+        if self.asynchronous:
+            coro = self._close()
+            if timeout:
+                coro = wait_for(coro, timeout)
+            return coro
+
+        sync(self.loop, self._close, fast=True, callback_timeout=timeout)
+        assert self.status == "closed"
+
+        if not is_python_shutting_down():
+            self._loop_runner.stop()
 
     @staticmethod
     def call(func: Callable, *args: Tuple[Any], **kwargs: Dict[str, Any]):
