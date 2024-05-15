@@ -13,9 +13,6 @@ import graphviper.utils.logger as logger
 import graphviper.utils.console as console
 
 from typing import Union, Dict
-from contextvars import ContextVar
-
-_current_client: Union[ContextVar[distributed.Client], ContextVar[None]] = ContextVar("_current_client", default=None)
 
 colorize = console.Colorize()
 
@@ -182,8 +179,8 @@ def local_client(
             "".join((str(round((psutil.virtual_memory().available / (1024 ** 2)) / cores)), "MB"))
         )
 
-    if not _current_client.get() is None:
-        return _current_client.get()
+    if not graphviper.dask.menrva.current_client.get() is None:
+        return graphviper.dask.menrva.current_client.get()
 
     cluster = distributed.LocalCluster(
         n_workers=cores,
@@ -211,7 +208,7 @@ def local_client(
         )
 
     logger.info("Created client " + str(client))
-    _current_client.set(client)
+    graphviper.dask.menrva.current_client.set(client)
 
     return client
 

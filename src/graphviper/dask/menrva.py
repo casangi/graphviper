@@ -15,6 +15,10 @@ from typing import Callable, Tuple, Dict, Any, Union
 
 colorize = console.Colorize()
 
+from contextvars import ContextVar
+
+current_client: Union[ContextVar[distributed.Client], ContextVar[None]] = ContextVar("_current_client", default=None)
+
 
 class MenrvaClient(distributed.Client):
     """
@@ -25,8 +29,24 @@ class MenrvaClient(distributed.Client):
     def __new__(cls, *args, **kwargs):
         if not hasattr(cls, '_instance'):
             cls._instance = super(MenrvaClient, cls).__new__(cls)
+            current_client.set(cls._instance)
 
         return cls._instance
+
+    def shutdown(self):
+        """Shut down the connected scheduler and workers
+
+               Note, this may disrupt other clients that may be using the same
+               scheduler and workers.
+
+               See Also
+               --------
+               Client.close : close only this client
+               """
+        print("Shutting down client")
+        current_client.set(None)
+        return self.sync(self._shutdown)
+
 
     @staticmethod
     def call(func: Callable, *args: Tuple[Any], **kwargs: Dict[str, Any]):
