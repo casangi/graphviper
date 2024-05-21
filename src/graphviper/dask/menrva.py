@@ -5,6 +5,7 @@ import inspect
 import importlib
 import importlib.util
 import pathlib
+import warnings
 
 import graphviper.utils.logger as logger
 import graphviper.utils.console as console
@@ -40,6 +41,30 @@ class MenrvaClient(distributed.Client):
             current_client.set(cls._instance)
 
         return cls._instance
+
+    def __enter__(self):
+        if not self._loop_runner.is_started():
+            self.start()
+        if self._set_as_default:
+            self._previous_as_current = current_client.set(self)
+
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if self._previous_as_current:
+            try:
+                current_client.reset(self._previous_as_current)
+            except ValueError as e:
+                if not e.args[0].endswith(" was created in a different Context"):
+                    raise  # pragma: nocover
+                warnings.warn(
+                    "It is deprecated to enter and exit the Client context "
+                    "manager from different threads",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+        # Close both local cluster AND client. Can change this to self.close() if that isn't the desired behaviour.
+        self.shutdown()
 
     def shutdown(self):
         """Shut down the connected scheduler and workers
