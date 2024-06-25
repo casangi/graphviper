@@ -61,9 +61,9 @@ def download(file: str, folder: str = ".") -> NoReturn:
 
         return
 
-    fullname = file_meta_data["file"]
-    id = file_meta_data["id"]
-    rlkey = file_meta_data["rlkey"]
+    fullname = file_meta_data["metadata"]["file"]
+    id = file_meta_data["metadata"]["id"]
+    rlkey = file_meta_data["metadata"]["rlkey"]
 
     url = "https://www.dropbox.com/scl/fi/{id}/{file}?rlkey={rlkey}".format(
         id=id, file=fullname, rlkey=rlkey

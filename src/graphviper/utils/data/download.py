@@ -1,3 +1,4 @@
+import json
 import psutil
 import pathlib
 import graphviper
@@ -5,11 +6,29 @@ import concurrent.futures
 
 import graphviper.utils.logger as logger
 
-from typing import NoReturn
-from graphviper.utils.console import Colorize
+from typing import NoReturn, Union
+import graphviper.utils.console as console
+
+colorize = console.Colorize()
 
 
-def download(file: str, folder: str = ".", source="", n_threads=None) -> NoReturn:
+def version():
+    # Load the file dropbox file meta data.
+    meta_data_path = pathlib.Path(__file__).parent.joinpath(
+        ".dropbox/file.download.json"
+    )
+
+    if meta_data_path.exists():
+        with open(meta_data_path) as json_file:
+            file_meta_data = json.load(json_file)
+
+            print(f'{file_meta_data["version"]}')
+
+    else:
+        logger.error(f'Couldn\'t find {colorize.blue(meta_data_path)}.')
+
+
+def download(file: Union[str, list], folder: str = ".", source="", n_threads=None) -> NoReturn:
     """
         Download tool for data stored externally.
     Parameters
@@ -29,8 +48,6 @@ def download(file: str, folder: str = ".", source="", n_threads=None) -> NoRetur
     """
 
     if not pathlib.Path(folder).resolve().exists():
-        colorize = Colorize()
-
         graphviper.utils.logger.info(f"Creating path:{colorize.blue(str(pathlib.Path(folder).resolve()))}")
         pathlib.Path(folder).resolve().mkdir()
 
@@ -46,11 +63,11 @@ def download(file: str, folder: str = ".", source="", n_threads=None) -> NoRetur
             file = [file]
 
         if n_threads is None:
-            n_threads = get_usable_threads(len(file))
+            n_threads = _get_usable_threads(len(file))
 
         logger.debug(f"Initializing downloader with {n_threads} threads.")
 
-        print_file_list(file)
+        _print_file_list(file)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=n_threads) as executor:
             for _file in file:
@@ -61,7 +78,40 @@ def download(file: str, folder: str = ".", source="", n_threads=None) -> NoRetur
                 )
 
 
-def get_usable_threads(n_files: int) -> int:
+def file_list():
+    from rich.table import Table
+    from rich.console import Console
+
+    console = Console()
+
+    table = Table(show_header=True, show_lines=True)
+
+    meta_data_path = pathlib.Path(__file__).parent.joinpath(
+        ".dropbox/file.download.json"
+    )
+
+    with open(meta_data_path) as json_file:
+        file_meta_data = json.load(json_file)
+
+        table.add_column("file", style="blue")
+        table.add_column("dtype", style="green")
+        table.add_column("telescope", style="green")
+        table.add_column("size", style="green")
+        table.add_column("mode", style="green")
+
+        for filename in file_meta_data["metadata"].keys():
+            values = [filename]
+
+            for key, value in file_meta_data["metadata"][filename].items():
+                if key in ["dtype", "telescope", "size", "mode"]:
+                    values.append(value)
+
+            table.add_row(*values)
+
+    console.print(table)
+
+
+def _get_usable_threads(n_files: int) -> int:
     # Always leave a single thread resource
     available_threads = psutil.cpu_count(logical=True) - 1
 
@@ -71,7 +121,7 @@ def get_usable_threads(n_files: int) -> int:
     return int(available_threads)
 
 
-def print_file_list(files: list) -> NoReturn:
+def _print_file_list(files: list) -> NoReturn:
     from rich.table import Table
     from rich.console import Console
     from rich import box

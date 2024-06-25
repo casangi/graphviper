@@ -10,6 +10,8 @@ import graphviper.utils.console as console
 
 from typing import NoReturn
 
+colorize = console.Colorize()
+
 
 def is_notebook() -> bool:
     """
@@ -46,7 +48,6 @@ def download(file: str, folder: str = ".") -> NoReturn:
     -------
         No return
     """
-    colorize = console.Colorize()
 
     # Load the file dropbox file meta data.
     meta_data_path = pathlib.Path(__file__).parent.joinpath(
@@ -63,9 +64,9 @@ def download(file: str, folder: str = ".") -> NoReturn:
             logger.info("File exists: {file}".format(file=str(full_file_path)))
             return
 
-        if file not in file_meta_data.keys():
+        if file not in file_meta_data["metadata"].keys():
             logger.info("Requested file not found")
-            logger.info(file_meta_data.keys())
+            logger.info(file_meta_data["metadata"].keys())
 
             return
 
@@ -79,9 +80,9 @@ def download(file: str, folder: str = ".") -> NoReturn:
 
         return
 
-    fullname = file_meta_data[file]["file"]
-    id = file_meta_data[file]["id"]
-    rlkey = file_meta_data[file]["rlkey"]
+    fullname = file_meta_data["metadata"][file]["file"]
+    id = file_meta_data["metadata"][file]["id"]
+    rlkey = file_meta_data["metadata"][file]["rlkey"]
 
     url = "https://www.dropbox.com/scl/fi/{id}/{file}?rlkey={rlkey}".format(
         id=id, file=fullname, rlkey=rlkey
@@ -101,7 +102,7 @@ def download(file: str, folder: str = ".") -> NoReturn:
 
     print(' ', end='', flush=True)
     with open(fullname, "wb") as fd, tqdm(
-        desc=fullname, total=total, unit="iB", unit_scale=True, unit_divisor=1024
+            desc=fullname, total=total, unit="iB", unit_scale=True, unit_divisor=1024
     ) as bar:
         for chunk in r.iter_content(chunk_size=1024):
             if chunk:
