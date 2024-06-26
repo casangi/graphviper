@@ -34,6 +34,36 @@ def is_notebook() -> bool:
         return False
 
 
+def get_from_dropbox(file: str, folder: str, file_meta_data: dict) -> None:
+    fullname = file_meta_data["metadata"][file]["file"]
+    id = file_meta_data["metadata"][file]["id"]
+    rlkey = file_meta_data["metadata"][file]["rlkey"]
+
+    url = "https://www.dropbox.com/scl/fi/{id}/{file}?rlkey={rlkey}".format(
+        id=id, file=fullname, rlkey=rlkey
+    )
+
+    r = requests.get(url, stream=True, headers={"user-agent": "Wget/1.16 (linux-gnu)"})
+    total = int(r.headers.get("content-length", 0))
+
+    fullname = str(pathlib.Path(folder).joinpath(fullname))
+
+    if is_notebook():
+        from tqdm.notebook import tqdm
+    else:
+        from tqdm import tqdm
+
+    print(' ', end='', flush=True)
+
+    with open(fullname, "wb") as fd, tqdm(
+            desc=fullname, total=total, unit="iB", unit_scale=True, unit_divisor=1024
+    ) as bar:
+        for chunk in r.iter_content(chunk_size=1024):
+            if chunk:
+                size = fd.write(chunk)
+                bar.update(size)
+
+
 def download(file: str, folder: str = ".") -> NoReturn:
     """
         Download tool for data stored on dropbox.
@@ -81,33 +111,9 @@ def download(file: str, folder: str = ".") -> NoReturn:
         return
 
     fullname = file_meta_data["metadata"][file]["file"]
-    id = file_meta_data["metadata"][file]["id"]
-    rlkey = file_meta_data["metadata"][file]["rlkey"]
-
-    url = "https://www.dropbox.com/scl/fi/{id}/{file}?rlkey={rlkey}".format(
-        id=id, file=fullname, rlkey=rlkey
-    )
-
-    headers = {"user-agent": "Wget/1.16 (linux-gnu)"}
-
-    r = requests.get(url, stream=True, headers=headers)
-    total = int(r.headers.get("content-length", 0))
-
     fullname = str(pathlib.Path(folder).joinpath(fullname))
 
-    if is_notebook():
-        from tqdm.notebook import tqdm
-    else:
-        from tqdm import tqdm
-
-    print(' ', end='', flush=True)
-    with open(fullname, "wb") as fd, tqdm(
-            desc=fullname, total=total, unit="iB", unit_scale=True, unit_divisor=1024
-    ) as bar:
-        for chunk in r.iter_content(chunk_size=1024):
-            if chunk:
-                size = fd.write(chunk)
-                bar.update(size)
+    get_from_dropbox(file, folder, file_meta_data)
 
     if zipfile.is_zipfile(fullname):
         shutil.unpack_archive(filename=fullname, extract_dir=folder)

@@ -111,6 +111,41 @@ def file_list():
     console.print(table)
 
 
+def get_file_list():
+    meta_data_path = pathlib.Path(__file__).parent.joinpath(
+        ".dropbox/file.download.json"
+    )
+
+    with open(meta_data_path) as json_file:
+        file_meta_data = json.load(json_file)
+
+        return list(file_meta_data["metadata"].keys())
+
+
+def update():
+    meta_data_path = pathlib.Path(__file__).parent.joinpath(
+        ".dropbox"
+    )
+
+    file_meta_data = {
+        "metadata": {
+            "file.download.json": {
+                "file": "file.download.json",
+                "id": "zomlfzszhewbj7kh2na09",
+                "rlkey": "m9yiogk0pfy0rggpgz9a0mate&st=evk6wk8c",
+            }
+        }
+    }
+
+    logger.info("Updating download list...")
+
+    graphviper.utils.data.dropbox.get_from_dropbox(
+        file="file.download.json",
+        folder=meta_data_path,
+        file_meta_data=file_meta_data
+    )
+
+
 def _get_usable_threads(n_files: int) -> int:
     # Always leave a single thread resource
     available_threads = psutil.cpu_count(logical=True) - 1
