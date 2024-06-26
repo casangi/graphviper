@@ -5,7 +5,7 @@ import numpy as np
 import xarray as xr
 import graphviper.utils.logger as logger
 
-from typing import Dict, Union
+from typing import Dict, Union, Optional
 from xradio.vis._processing_set import processing_set
 from scipy.interpolate import interp1d
 
@@ -223,6 +223,7 @@ def interpolate_data_coords_onto_parallel_coords(
         "next",
     } = "nearest",
     assume_sorted: bool = True,
+    ps_partition : Optional[str] = None # Current options are {'field', 'spw'}
 ) -> Dict:
     """Interpolate data_coords onto parallel_coords to create the ``node_task_data_mapping``.
 
@@ -238,6 +239,7 @@ def interpolate_data_coords_onto_parallel_coords(
         The kind of interpolation method to use as described in `Scipy documentation <https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interp1d.html>`_ , by default ``nearest``.
     assume_sorted : bool, optional
         Are the data in parallel_coords and input_data monotonically increasing in value, by default True.
+    ps_partition : An optional list of strings ('spw' and/or 'field' are currently supported); if non-empty, the function will use the meta-data of each Dataset to partition the parallel sets by these pseudo-dimensions as well as the actual Dataset dimensions specified.
     Returns
     -------
     Dict :
@@ -319,104 +321,125 @@ def interpolate_data_coords_onto_parallel_coords(
     - ``task_coords``: The chunk of the parallel_coord that is assigned to this node.
     """
     # Nested Dict keys: xds_name, dim, chunk_index.
+
+    if ps_partition == None:
+        ps_partition = []
+    if ('spw' in ps_partition) and ('frequency' in parallel_coords):
+        raise ValueError("Cannot split by both spw and frequency")
+
+    if len(ps_partition) > 0:
+        partition_map = _partition_ps_by_non_dimensions(input_data, ps_partition)
+    else:
+        # By default we iterate over everything
+        partition_map = {0, [xds_name for xds_name in input_data]}
+                         
     xds_data_selection = {}
 
-    # Loop over every dataset and interpolate onto parallel_coords.
-    for xds_name in input_data:
-        for dim, pc in parallel_coords.items():
-            xds = input_data[xds_name]
+    # Loop over every dataset and interpolate onto parallel_coords;
+    # The result of this loop is a filled-in xds_data_selection that maps each
+    # xds to a dictionary of mapping its dimensions to the range for each chunk
+    for partition in partition_map:
+        for xds_name in input_data:
+            for dim, pc in parallel_coords.items():
+                xds = input_data[xds_name]
 
-            # Create interpolator
-            interpolator = interp1d(
-                input_data[xds_name][dim].values,
-                np.arange(len(input_data[xds_name][dim].values)),
-                kind=interpolation_method,
-                bounds_error=False,
-                fill_value=-1,
-                # fill_value="extrapolate",
-                assume_sorted=assume_sorted,
-            )
+                interpolator = interp1d(
+                    input_data[xds_name][dim].values,
+                    np.arange(len(input_data[xds_name][dim].values)),
+                    kind=interpolation_method,
+                    bounds_error=False,
+                    fill_value=-1,
+                    # fill_value="extrapolate",
+                    assume_sorted=assume_sorted,
+                )
 
-            chunk_indx_start_stop = {}
-            # Interpolate all the chunk edges. This is done for performance reasons.
+                chunk_indx_start_stop = {}
+                # Interpolate all the chunk edges. This is done for performance reasons.
 
-            if "data_chunks_edges" not in pc:
-                pc["data_chunks_edges"] = _array_split_edges(pc["data_chunks"])
+                if "data_chunks_edges" not in pc:
+                    pc["data_chunks_edges"] = _array_split_edges(pc["data_chunks"])
 
-            interp_index = interpolator(pc["data_chunks_edges"]).astype(int)
+                interp_index = interpolator(pc["data_chunks_edges"]).astype(int)
 
-            i = 0
-            # Split the interp_index for each chunk and fix any boundary issues.
-            for chunk_index in sorted(pc["data_chunks"].keys()):
-                if interp_index[i] == -1 and interp_index[i + 1] == -1:
-                    chunk_indx_start_stop[chunk_index] = slice(None)
-                    if (pc["data_chunks_edges"][i] < input_data[xds_name][dim][0])  and (pc["data_chunks_edges"][i+1] > input_data[xds_name][dim][-1]):
-                        interp_index[i] = 0
-                        interp_index[i+1] = -2 
+                i = 0
+                # Split the interp_index for each chunk and fix any boundary issues.
+                for chunk_index in sorted(pc["data_chunks"].keys()):
+                    if interp_index[i] == -1 and interp_index[i + 1] == -1:
+                        chunk_indx_start_stop[chunk_index] = slice(None)
+                        if (pc["data_chunks_edges"][i] < input_data[xds_name][dim][0])  and (pc["data_chunks_edges"][i+1] > input_data[xds_name][dim][-1]):
+                            interp_index[i] = 0
+                            interp_index[i+1] = -2 
+                            chunk_indx_start_stop[chunk_index] = slice(
+                            interp_index[i], interp_index[i + 1] + 1)
+                    else:
+                        if interp_index[i] == -1:
+                            interp_index[i] = 0
+                        if interp_index[i + 1] == -1:
+                            interp_index[i + 1] = -2
                         chunk_indx_start_stop[chunk_index] = slice(
-                        interp_index[i], interp_index[i + 1] + 1)
-                else:
-                    if interp_index[i] == -1:
-                        interp_index[i] = 0
-                    if interp_index[i + 1] == -1:
-                        interp_index[i + 1] = -2
-                    chunk_indx_start_stop[chunk_index] = slice(
-                        interp_index[i], interp_index[i + 1] + 1
-                    )
-                i = i + 2
+                            interp_index[i], interp_index[i + 1] + 1
+                        )
+                    i = i + 2
 
-            xds_data_selection.setdefault(xds_name, {})[dim] = chunk_indx_start_stop
+                xds_data_selection.setdefault(xds_name, {})[dim] = chunk_indx_start_stop
 
     # To create the node_task_data_mapping we have to get the slices for each dimension on node task level.
     # Using itertools we can get all the combinations of the chunk indices that belong to a given node:
-    iter_chunks_indices, parallel_dims = _make_iter_chunks_indices(parallel_coords)
     node_task_data_mapping = (
         {}
     )  # Nested Dict keys: task_id, [data_selection,chunk_indices,parallel_dims], xds_name, dim.
 
     # Loop over every task node (each task node has a unique task_id):
-    for task_id, chunk_indices in enumerate(iter_chunks_indices):
-        logger.debug(f"chunk_index: {task_id}, {chunk_indices}")
-        node_task_data_mapping[task_id] = {}
-        node_task_data_mapping[task_id]["chunk_indices"] = chunk_indices
-        node_task_data_mapping[task_id]["parallel_dims"] = parallel_dims
-        node_task_data_mapping[task_id]["data_selection"] = {}
 
-        task_coords = {}
-        # For task_id get the task_coords from parallel_coords:
-        for i_dim, dim in enumerate(parallel_dims):
-            chunk_coords = {}
-            chunk_coords["data"] = parallel_coords[dim]["data_chunks"][
-                chunk_indices[i_dim]
-            ]
-            chunk_coords["dims"] = parallel_coords[dim]["dims"]
-            chunk_coords["attrs"] = parallel_coords[dim]["attrs"]
-            task_coords[dim] = chunk_coords
+    task_id = 0
+    for partition in partition_map.keys():
+        # We redo this for every partition, because task number will have changed
+        iter_chunks_indices, parallel_dims = _make_iter_chunks_indices(parallel_coords)
+        for chunk_indices in iter_chunks_indices:
+            logger.debug(f"chunk_index: {task_id}, {chunk_indices}")
+            node_task_data_mapping[task_id] = {}
+            node_task_data_mapping[task_id]["chunk_indices"] = chunk_indices
+            node_task_data_mapping[task_id]["parallel_dims"] = parallel_dims
+            node_task_data_mapping[task_id]["data_selection"] = {}
 
-        node_task_data_mapping[task_id]["task_coords"] = task_coords
+            task_coords = {}
+            # For task_id get the task_coords from parallel_coords:
+            for i_dim, dim in enumerate(parallel_dims):
+                chunk_coords = {}
+                chunk_coords["data"] = parallel_coords[dim]["data_chunks"][
+                    chunk_indices[i_dim]
+                ]
+                chunk_coords["dims"] = parallel_coords[dim]["dims"]
+                chunk_coords["attrs"] = parallel_coords[dim]["attrs"]
+                task_coords[dim] = chunk_coords
 
-        # For task_id get the selection slices for each dataset in the input data from xds_data_selection:
-        for xds_name in input_data.keys():
-            node_task_data_mapping[task_id]["data_selection"][xds_name] = {}
-            empty_chunk = False
-            for i, chunk_index in enumerate(chunk_indices):
-                if chunk_index in xds_data_selection[xds_name][parallel_dims[i]]:
-                    node_task_data_mapping[task_id]["data_selection"][xds_name][
-                        parallel_dims[i]
-                    ] = xds_data_selection[xds_name][parallel_dims[i]][chunk_index]
+            # breakpoint()
+            node_task_data_mapping[task_id]["task_coords"] = task_coords
+            partition_xds_names = partition_map[partition]
+            # For task_id get the selection slices for each dataset in the input data from xds_data_selection:            
+            for xds_name in partition_xds_names:
+                node_task_data_mapping[task_id]["data_selection"][xds_name] = {}
+                empty_chunk = False
+                for i, chunk_index in enumerate(chunk_indices):
+                    if chunk_index in xds_data_selection[xds_name][parallel_dims[i]]:
+                        node_task_data_mapping[task_id]["data_selection"][xds_name][
+                            parallel_dims[i]
+                        ] = xds_data_selection[xds_name][parallel_dims[i]][chunk_index]
 
-                    if xds_data_selection[xds_name][parallel_dims[i]][
-                        chunk_index
-                    ] == slice(None):
+                        if xds_data_selection[xds_name][parallel_dims[i]][
+                            chunk_index
+                        ] == slice(None):
+                            empty_chunk = True
+                    else:
                         empty_chunk = True
-                else:
-                    empty_chunk = True
 
-            if (
-                empty_chunk
-            ):  # The xds with xds_name has no data for the parallel chunk (no slice on one of the dims).
-                del node_task_data_mapping[task_id]["data_selection"][xds_name] 
-                #node_task_data_mapping[task_id]["data_selection"][xds_name] = None
+                # 
+                if (
+                    empty_chunk
+                ):  # The xds with xds_name has no data for the parallel chunk (no slice on one of the dims).
+                    del node_task_data_mapping[task_id]["data_selection"][xds_name] 
+            task_id += 1
+            # breakpoint()
 
     return node_task_data_mapping
 
@@ -499,3 +522,23 @@ def _make_iter_chunks_indices(parallel_coords: Dict):
 
     iter_chunks_indxs = itertools.product(*list_chunk_indxs)
     return iter_chunks_indxs, parallel_dims
+
+def _partition_ps_by_non_dimensions(ps, ps_partition_keys):
+    "This requires at least one member of ps_partition_keys!"
+    ps_splittable = {
+        'spw' : lambda x: x.frequency.spw_id,
+        'field' : lambda x: x.field_info['field_id']
+    }
+    ps_split_map = {}
+    for name, xds in ps.items():
+        for key in ps_partition_keys:
+            val_for_xds = ps_splittable[key](xds)
+            ps_split_map.setdefault(key, {}).setdefault(val_for_xds, []).append(name)
+    d = {}
+    # We loop over the cartersian product of the keys
+    for multi_index in itertools.product(*[ps_split_map[key] for key in ps_partition_keys]):
+        # And for each key we look up the corresponding set of xds names
+        sets = [set(ps_split_map[key][i]) for i, key in zip(multi_index, ps_partition_keys)]
+        d[multi_index] = set.intersection(*sets)
+    return d
+
