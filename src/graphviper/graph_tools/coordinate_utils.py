@@ -331,7 +331,7 @@ def interpolate_data_coords_onto_parallel_coords(
         partition_map = _partition_ps_by_non_dimensions(input_data, ps_partition)
     else:
         # By default we iterate over everything
-        partition_map = {0, [xds_name for xds_name in input_data]}
+        partition_map = {0 : [xds_name for xds_name in input_data]}
                          
     xds_data_selection = {}
 
