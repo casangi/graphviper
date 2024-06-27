@@ -1,3 +1,7 @@
+import os
+import shutil
+import requests
+import zipfile
 import json
 import psutil
 import pathlib
@@ -47,15 +51,14 @@ def download(file: Union[str, list], folder: str = ".", source="", n_threads=Non
         No return
     """
 
+    graphviper.utils.data.update()
+
     if not pathlib.Path(folder).resolve().exists():
         graphviper.utils.logger.info(f"Creating path:{colorize.blue(str(pathlib.Path(folder).resolve()))}")
         pathlib.Path(folder).resolve().mkdir()
 
-    if source == "api":
-        graphviper.utils.data.remote.download(file=file, folder=folder)
-
-    elif source == "serial":
-        graphviper.utils.data.dropbox.download(file=file, folder=folder)
+    if source == "serial":
+        _download(file=file, folder=folder)
 
     else:
 
@@ -67,18 +70,18 @@ def download(file: Union[str, list], folder: str = ".", source="", n_threads=Non
 
         logger.debug(f"Initializing downloader with {n_threads} threads.")
 
-        _print_file_list(file)
+        _print_file_queue(file)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=n_threads) as executor:
             for _file in file:
                 executor.submit(
-                    graphviper.utils.data.dropbox.download,
+                    _download,
                     _file,
                     folder
                 )
 
 
-def file_list():
+def list_files():
     from rich.table import Table
     from rich.console import Console
 
@@ -89,6 +92,9 @@ def file_list():
     meta_data_path = pathlib.Path(__file__).parent.joinpath(
         ".dropbox/file.download.json"
     )
+
+    if not meta_data_path.exists():
+        update()
 
     with open(meta_data_path) as json_file:
         file_meta_data = json.load(json_file)
@@ -111,10 +117,13 @@ def file_list():
     console.print(table)
 
 
-def get_file_list():
+def get_files():
     meta_data_path = pathlib.Path(__file__).parent.joinpath(
         ".dropbox/file.download.json"
     )
+
+    if not meta_data_path.exists():
+        update()
 
     with open(meta_data_path) as json_file:
         file_meta_data = json.load(json_file)
@@ -137,11 +146,11 @@ def update():
         }
     }
 
-    logger.info("Updating download list...")
+    logger.info("Updating file metadata information ... ")
 
-    graphviper.utils.data.dropbox.get_from_dropbox(
+    _get_from_dropbox(
         file="file.download.json",
-        folder=meta_data_path,
+        folder=str(meta_data_path),
         file_meta_data=file_meta_data
     )
 
@@ -156,7 +165,7 @@ def _get_usable_threads(n_files: int) -> int:
     return int(available_threads)
 
 
-def _print_file_list(files: list) -> NoReturn:
+def _print_file_queue(files: list) -> NoReturn:
     from rich.table import Table
     from rich.console import Console
     from rich import box
@@ -170,3 +179,112 @@ def _print_file_list(files: list) -> NoReturn:
         table.add_row(f"[magenta]{file}[/magenta]")
 
     console.print(table)
+
+
+def _is_notebook() -> bool:
+    """
+        Determines if code is running in  jupyter notebook.
+    Returns
+    -------
+        bool
+
+    """
+    try:
+        from IPython import get_ipython
+
+        shell = get_ipython().__class__.__name__
+        if shell == "ZMQInteractiveShell":
+            return True
+        else:
+            raise ImportError
+
+    except ImportError:
+        return False
+
+
+def _get_from_dropbox(file: str, folder: str, file_meta_data: dict) -> None:
+    fullname = file_meta_data["metadata"][file]["file"]
+    id = file_meta_data["metadata"][file]["id"]
+    rlkey = file_meta_data["metadata"][file]["rlkey"]
+
+    url = "https://www.dropbox.com/scl/fi/{id}/{file}?rlkey={rlkey}".format(
+        id=id, file=fullname, rlkey=rlkey
+    )
+
+    r = requests.get(url, stream=True, headers={"user-agent": "Wget/1.16 (linux-gnu)"})
+    total = int(r.headers.get("content-length", 0))
+
+    fullname = str(pathlib.Path(folder).joinpath(fullname))
+
+    if _is_notebook():
+        from tqdm.notebook import tqdm
+    else:
+        from tqdm import tqdm
+
+    print(' ', end='', flush=True)
+
+    with open(fullname, "wb") as fd, tqdm(
+            desc=fullname, total=total, unit="iB", unit_scale=True, unit_divisor=1024
+    ) as bar:
+        for chunk in r.iter_content(chunk_size=1024):
+            if chunk:
+                size = fd.write(chunk)
+                bar.update(size)
+
+
+def _download(file: str, folder: str = ".") -> NoReturn:
+    """
+        Download tool for data stored on dropbox.
+    Parameters
+    ----------
+    file : str
+        Filename as stored on dropbox.
+    folder : str
+        Destination folder.
+
+    Returns
+    -------
+        No return
+    """
+
+    # Load the file dropbox file meta data.
+    meta_data_path = pathlib.Path(__file__).parent.joinpath(
+        ".dropbox/file.download.json"
+    )
+
+    if meta_data_path.exists():
+        with open(meta_data_path) as json_file:
+            file_meta_data = json.load(json_file)
+
+        full_file_path = pathlib.Path(folder).joinpath(file)
+
+        if full_file_path.exists():
+            logger.info("File exists: {file}".format(file=str(full_file_path)))
+            return
+
+        if file not in file_meta_data["metadata"].keys():
+            logger.info("Requested file not found")
+            logger.info(file_meta_data["metadata"].keys())
+
+            return
+
+    # If the local file metadata for the download can't be found ... trying to update ...
+    else:
+
+        logger.wanring(
+            f"Couldn't find file metadata locally in {colorize.blue(str(meta_data_path))}, trying to retrieve ...")
+
+        graphviper.utils.data.update()
+
+        return
+
+    fullname = file_meta_data["metadata"][file]["file"]
+    fullname = str(pathlib.Path(folder).joinpath(fullname))
+
+    _get_from_dropbox(file, folder, file_meta_data)
+
+    if zipfile.is_zipfile(fullname):
+        shutil.unpack_archive(filename=fullname, extract_dir=folder)
+
+        # Let's clean up after ourselves
+        os.remove(fullname)
