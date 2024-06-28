@@ -18,7 +18,7 @@ dependencies = [
     'distributed',
     'matplotlib',
     'numba>=0.57.0',
-    'numpy',
+    'numpy<2.0.0',
     'psutil',
     'ipywidgets',
     'prettytable',
