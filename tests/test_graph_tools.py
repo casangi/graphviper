@@ -95,9 +95,45 @@ def test_map_reduce():
     assert dask.compute(dask_graph)[0] == 44544495255.635056
 
 
+def test_ps_partition():
+    import pathlib
+
+    msv2name = "VLBA_TL016B_split.ms"
+    zarrPath = str(pathlib.Path(msv2name).with_suffix('.zarr')) 
+
+    from graphviper.utils.data import download
+    download(file=msv2name)
+
+    from xradio.vis.convert_msv2_to_processing_set import convert_msv2_to_processing_set
+    partition_scheme = 'ddi_state_field'
+    convert_msv2_to_processing_set(
+        in_file=msv2name,
+        out_file=zarrPath,
+        partition_scheme=partition_scheme,
+        overwrite=True)
+
+    from xradio.vis.read_processing_set import read_processing_set
+    ps = read_processing_set(zarrPath)
+    
+    from graphviper.graph_tools.coordinate_utils import (
+        interpolate_data_coords_onto_parallel_coords,
+        make_parallel_coord
+    )
+    # Let's try an empty parallel coord map first
+    parallel_coords = {}
+    node_task_data_mapping = interpolate_data_coords_onto_parallel_coords(parallel_coords,
+                                                                          ps, ps_partition=['spw'])
+    assert len(node_task_data_mapping.keys()) == 2
+    # We check that for each data selection the spw_id is unique:
+    spw_split_success = all([len(set([ps[k].frequency.spw_id for k in dm['data_selection'].keys()]))==1
+                                    for dm in node_task_data_mapping.values()])
+    assert spw_split_success
+
+    
 if __name__ == '__main__':
     test_map_reduce()
-
+    test_ps_partition()
+    
 """
 chunk_indx 0 (0, 0)
 chunk_indx 1 (0, 1)
