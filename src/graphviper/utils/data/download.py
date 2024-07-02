@@ -22,14 +22,13 @@ def version():
         ".dropbox/file.download.json"
     )
 
-    if meta_data_path.exists():
-        with open(meta_data_path) as json_file:
-            file_meta_data = json.load(json_file)
+    # Verify that the download metadata exist and update if not.
+    _verify_metadata_file()
 
-            print(f'{file_meta_data["version"]}')
+    with open(meta_data_path) as json_file:
+        file_meta_data = json.load(json_file)
 
-    else:
-        logger.error(f'Couldn\'t find {colorize.blue(meta_data_path)}.')
+        logger.info(f'{file_meta_data["version"]}')
 
 
 def download(file: Union[str, list], folder: str = ".", source="", n_threads=None) -> NoReturn:
@@ -93,8 +92,8 @@ def list_files():
         ".dropbox/file.download.json"
     )
 
-    if not meta_data_path.exists():
-        update()
+    # Verify that the download metadata exist and update if not.
+    _verify_metadata_file()
 
     with open(meta_data_path) as json_file:
         file_meta_data = json.load(json_file)
@@ -122,8 +121,8 @@ def get_files():
         ".dropbox/file.download.json"
     )
 
-    if not meta_data_path.exists():
-        update()
+    # Verify that the download metadata exist and update if not.
+    _verify_metadata_file()
 
     with open(meta_data_path) as json_file:
         file_meta_data = json.load(json_file)
@@ -140,19 +139,23 @@ def update():
         "metadata": {
             "file.download.json": {
                 "file": "file.download.json",
-                "id": "zomlfzszhewbj7kh2na09",
-                "rlkey": "m9yiogk0pfy0rggpgz9a0mate&st=evk6wk8c",
+                "id": "1m53led1mchpdc4m3pv37",
+                "rlkey": "enkp8m1hv437nu6p020owflrt&st=11psoc6n",
             }
         }
     }
 
     logger.info("Updating file metadata information ... ")
 
+    # Download metadata without visual indicator bar.
     _get_from_dropbox(
         file="file.download.json",
         folder=str(meta_data_path),
-        file_meta_data=file_meta_data
+        file_meta_data=file_meta_data,
+        bar=False
     )
+
+    assert meta_data_path.exists() is True, logger.error("Unable to retrieve download metadata.")
 
 
 def _get_usable_threads(n_files: int) -> int:
@@ -202,7 +205,7 @@ def _is_notebook() -> bool:
         return False
 
 
-def _get_from_dropbox(file: str, folder: str, file_meta_data: dict) -> None:
+def _get_from_dropbox(file: str, folder: str, file_meta_data: dict, bar=True) -> None:
     fullname = file_meta_data["metadata"][file]["file"]
     id = file_meta_data["metadata"][file]["id"]
     rlkey = file_meta_data["metadata"][file]["rlkey"]
@@ -223,13 +226,21 @@ def _get_from_dropbox(file: str, folder: str, file_meta_data: dict) -> None:
 
     print(' ', end='', flush=True)
 
-    with open(fullname, "wb") as fd, tqdm(
-            desc=fullname, total=total, unit="iB", unit_scale=True, unit_divisor=1024
-    ) as bar:
-        for chunk in r.iter_content(chunk_size=1024):
-            if chunk:
-                size = fd.write(chunk)
-                bar.update(size)
+    # Is there a cleaner way to do this?
+    if bar:
+        with open(fullname, "wb") as fd, tqdm(
+                desc=fullname, total=total, unit="iB", unit_scale=True, unit_divisor=1024
+        ) as bar:
+            for chunk in r.iter_content(chunk_size=1024):
+                if chunk:
+                    size = fd.write(chunk)
+                    bar.update(size)
+
+    else:
+        with open(fullname, "wb") as fd:
+            for chunk in r.iter_content(chunk_size=1024):
+                if chunk:
+                    size = fd.write(chunk)
 
 
 def _download(file: str, folder: str = ".") -> NoReturn:
@@ -263,10 +274,13 @@ def _download(file: str, folder: str = ".") -> NoReturn:
             return
 
         if file not in file_meta_data["metadata"].keys():
-            logger.info("Requested file not found")
-            logger.info(file_meta_data["metadata"].keys())
+            logger.error("Requested file not found: {file}")
+            logger.info(f"For a list of available files try using "
+                        f"{colorize.blue('graphviper.utils.data.list_files()')}.")
 
             return
+
+
 
     # If the local file metadata for the download can't be found ... trying to update ...
     else:
@@ -288,3 +302,13 @@ def _download(file: str, folder: str = ".") -> NoReturn:
 
         # Let's clean up after ourselves
         os.remove(fullname)
+
+
+def _verify_metadata_file():
+    meta_data_path = pathlib.Path(__file__).parent.joinpath(
+        ".dropbox/file.download.json"
+    )
+
+    if not meta_data_path.exists():
+        logger.warning(f'Couldn\'t find {colorize.blue(meta_data_path)}.')
+        update()
