@@ -130,22 +130,12 @@ def get_files():
         return list(file_meta_data["metadata"].keys())
 
 
-def _makedir(path, folder):
-    p = pathlib.Path(path).joinpath(folder)
-    if not p.exists():
-        logger.info(f"Creating path:{colorize.blue(str(pathlib.Path(folder).resolve()))}")
-        p.mkdir()
-
-
 def update():
     meta_data_path = pathlib.Path(__file__).parent.joinpath(
         ".dropbox"
     )
 
     _makedir(str(pathlib.Path(__file__).parent), ".dropbox")
-
-    logger.warning(f"meta_data_path: {os.listdir(str(pathlib.Path(__file__).parent))}")
-    logger.warning(f"meta_data_path: {os.listdir(str(meta_data_path))}")
 
     file_meta_data = {
         "metadata": {
@@ -311,6 +301,19 @@ def _download(file: str, folder: str = ".") -> NoReturn:
 
         # Let's clean up after ourselves
         os.remove(fullname)
+
+
+def _makedir(path, folder):
+    p = pathlib.Path(path).joinpath(folder)
+    try:
+        p.mkdir()
+        logger.info(f"Creating path:{colorize.blue(str(pathlib.Path(folder).resolve()))}")
+
+    except FileExistsError:
+        logger.warning(f"File exists: {colorize.blue(str(p.resolve()))}")
+
+    except FileNotFoundError:
+        logger.warning(f"One fo the parent directories cannot be found: {colorize.blue(str(p.resolve()))}")
 
 
 def _verify_metadata_file():
