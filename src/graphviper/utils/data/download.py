@@ -147,7 +147,7 @@ def update():
         }
     }
 
-    logger.info("Updating file metadata information .... ")
+    logger.info("Updating file metadata information ... ")
 
     # Download metadata without visual indicator bar.
     _get_from_dropbox(
