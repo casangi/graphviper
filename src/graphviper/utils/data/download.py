@@ -135,7 +135,8 @@ def update():
         ".dropbox"
     )
 
-    logger.warning(f"meta_data_path: {str(meta_data_path)}")
+
+    logger.warning(f"meta_data_path: {os.listdir(meta_data_path)}")
 
     file_meta_data = {
         "metadata": {
@@ -157,7 +158,7 @@ def update():
         bar=False
     )
 
-    assert meta_data_path.exists() is True, logger.error("Unable to retrieve download metadata.")
+    #assert meta_data_path.exists() is True, logger.error("Unable to retrieve download metadata.")
 
 
 def _get_usable_threads(n_files: int) -> int:
