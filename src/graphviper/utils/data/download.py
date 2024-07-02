@@ -280,9 +280,6 @@ def _download(file: str, folder: str = ".") -> NoReturn:
 
             return
 
-
-
-    # If the local file metadata for the download can't be found ... trying to update ...
     else:
 
         logger.wanring(
