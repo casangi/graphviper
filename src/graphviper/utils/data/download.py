@@ -31,7 +31,7 @@ def version():
         logger.info(f'{file_meta_data["version"]}')
 
 
-def download(file: Union[str, list], folder: str = ".", source="", n_threads=None) -> NoReturn:
+def download(file: Union[str, list], folder: str = ".", threaded=True, n_threads=None) -> NoReturn:
     """
         Download tool for data stored externally.
     Parameters
@@ -40,8 +40,8 @@ def download(file: Union[str, list], folder: str = ".", source="", n_threads=Non
         Filename as stored on external source.
     folder : str
         Destination folder.
-    source : str
-        File metadata source location.
+    threaded : bool
+        File metadata download type.
     n_threads : int
         Number of threads to use.
 
@@ -56,7 +56,7 @@ def download(file: Union[str, list], folder: str = ".", source="", n_threads=Non
         graphviper.utils.logger.info(f"Creating path:{colorize.blue(str(pathlib.Path(folder).resolve()))}")
         pathlib.Path(folder).resolve().mkdir()
 
-    if source == "serial":
+    if threaded is False:
         _download(file=file, folder=folder)
 
     else:
