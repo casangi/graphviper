@@ -130,10 +130,19 @@ def get_files():
         return list(file_meta_data["metadata"].keys())
 
 
+def _makedir(path, folder):
+    p = pathlib.Path(path).joinpath(folder)
+    if not p.exists():
+        logger.info(f"Creating path:{colorize.blue(str(pathlib.Path(folder).resolve()))}")
+        p.mkdir()
+
+
 def update():
     meta_data_path = pathlib.Path(__file__).parent.joinpath(
         ".dropbox"
     )
+
+    _makedir(str(pathlib.Path(__file__).parent), ".dropbox")
 
     logger.warning(f"meta_data_path: {os.listdir(str(pathlib.Path(__file__).parent))}")
     logger.warning(f"meta_data_path: {os.listdir(str(meta_data_path))}")
