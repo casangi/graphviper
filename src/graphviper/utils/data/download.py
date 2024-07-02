@@ -135,8 +135,8 @@ def update():
         ".dropbox"
     )
 
-
-    logger.warning(f"meta_data_path: {os.listdir(meta_data_path)}")
+    logger.warning(f"meta_data_path: {os.listdir(str(pathlib.Path(__file__).parent))}")
+    logger.warning(f"meta_data_path: {os.listdir(str(meta_data_path))}")
 
     file_meta_data = {
         "metadata": {
