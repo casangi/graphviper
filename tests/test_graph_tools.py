@@ -12,7 +12,7 @@ def test_map_reduce():
     viper_client = local_client(cores=2, memory_limit="3GB", autorestrictor=True)
 
     ps_store = "Antennae_North.cal.lsrk.split.vis.zarr"
-    download(file=ps_store)
+    download(file=ps_store, threaded=False)
 
     from xradio.vis.read_processing_set import read_processing_set
 
