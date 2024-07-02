@@ -135,6 +135,8 @@ def update():
         ".dropbox"
     )
 
+    logger.debug(str(meta_data_path))
+
     file_meta_data = {
         "metadata": {
             "file.download.json": {
