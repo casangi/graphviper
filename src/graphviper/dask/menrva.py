@@ -11,7 +11,6 @@ import graphviper.utils.logger as logger
 import graphviper.utils.console as console
 
 from distributed.diagnostics.plugin import WorkerPlugin
-from distributed.utils import is_python_shutting_down
 from distributed.utils import sync
 from distributed.utils import NoOpAwaitable
 from distributed.utils import wait_for
@@ -34,6 +33,8 @@ class MenrvaClient(distributed.Client):
     This and extended version of the general Dask distributed client that will allow for
     plugin management and more extended features.
     """
+
+    _is_finalizing: Union[list, bool] = staticmethod(sys.is_finalizing)
 
     def __new__(cls, *args, **kwargs):
         if not hasattr(cls, '_instance'):
@@ -124,7 +125,7 @@ class MenrvaClient(distributed.Client):
         sync(self.loop, self._close, fast=True, callback_timeout=timeout)
         assert self.status == "closed"
 
-        if not is_python_shutting_down():
+        if not self._is_finalizing():
             self._loop_runner.stop()
 
     @staticmethod

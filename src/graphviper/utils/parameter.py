@@ -92,7 +92,7 @@ def config_search(root: str = "/", module_name=None) -> Union[None, str]:
             "File search from root could take some time ..."
         )
 
-    graphviper.utils.logger.info(
+    graphviper.utils.logger.debug(
         "Searching {} for configuration file, please wait ...".format(
             colorize.blue(root)
         )

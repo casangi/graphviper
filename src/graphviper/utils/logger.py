@@ -23,11 +23,26 @@ from graphviper.utils.console import add_verbose_info
 
 from dask.distributed import get_worker
 
+from contextvars import ContextVar
+
 from typing import Union
 
+VERBOSE=True
+DEFAULT=False
+
+# global verbosity flag
+verbosity: Union[ContextVar[bool], ContextVar[None]] = ContextVar("message_verbosity", default=None)
+
+def set_verbosity(state: Union[None, bool]=None):
+    print(f"Setting verbosity to {state}")
+
+    verbosity.set(state)
 
 def info(message: str, verbose: bool = False):
     logger_name = os.getenv("VIPER_LOGGER_NAME")
+
+    if verbosity.get() is True or False:
+        verbose = verbosity.get()
 
     if verbose:
         message = add_verbose_info(message=message, color="blue")
@@ -38,6 +53,9 @@ def info(message: str, verbose: bool = False):
 
 def log(message: str, verbose: bool = False):
     logger_name = os.getenv("VIPER_LOGGER_NAME")
+
+    if verbosity.get() is True or False:
+        verbose = verbosity.get()
 
     if verbose:
         message = add_verbose_info(message=message, color="blue")
@@ -50,6 +68,9 @@ def log(message: str, verbose: bool = False):
 def exception(message: str, verbose: bool = False):
     logger_name = os.getenv("VIPER_LOGGER_NAME")
 
+    if verbosity.get() is True or False:
+        verbose = verbosity.get()
+
     if verbose:
         message = add_verbose_info(message=message, color="blue")
 
@@ -61,6 +82,9 @@ def exception(message: str, verbose: bool = False):
 def debug(message: str, verbose: bool = False):
     logger_name = os.getenv("VIPER_LOGGER_NAME")
 
+    if verbosity.get() is True or False:
+        verbose = verbosity.get()
+
     if verbose:
         message = add_verbose_info(message=message, color="green")
 
@@ -70,6 +94,9 @@ def debug(message: str, verbose: bool = False):
 
 def warning(message: str, verbose: bool = False):
     logger_name = os.getenv("VIPER_LOGGER_NAME")
+
+    if verbosity.get() is True or False:
+        verbose = verbosity.get()
 
     if verbose:
         message = add_verbose_info(message=message, color="orange")
@@ -81,6 +108,9 @@ def warning(message: str, verbose: bool = False):
 def error(message: str, verbose: bool = True):
     logger_name = os.getenv("VIPER_LOGGER_NAME")
 
+    if verbosity.get() is True or False:
+        verbose = verbosity.get()
+
     if verbose:
         message = add_verbose_info(message=message, color="red")
 
@@ -90,6 +120,9 @@ def error(message: str, verbose: bool = True):
 
 def critical(message: str, verbose: bool = True):
     logger_name = os.getenv("VIPER_LOGGER_NAME")
+
+    if verbosity.get() is True or False:
+        verbose = verbosity.get()
 
     if verbose:
         message = add_verbose_info(message=message, color="alert")
