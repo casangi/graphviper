@@ -19,10 +19,10 @@ def test_map_reduce():
     ps = read_processing_set(
         ps_store=ps_store,
         intents=["OBSERVE_TARGET#ON_SOURCE"],
-        fields=None,
     )
+
     ms_xds = ps[
-        "Antennae_North.cal.lsrk.split_ddi_0_intent_OBSERVE_TARGET#ON_SOURCE_field_id_0"
+        "Antennae_North.cal.lsrk.split_0"
     ]
 
     from graphviper.graph_tools.coordinate_utils import make_parallel_coord
