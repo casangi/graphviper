@@ -15,6 +15,7 @@ dependencies = [
     'cerberus',
     'dask',
     'dask_jobqueue',
+    'dropbox',
     'distributed',
     'matplotlib',
     'numba>=0.57.0',
