@@ -20,7 +20,7 @@ def test_map_reduce():
         ps_store=ps_store,
         intents=["OBSERVE_TARGET#ON_SOURCE"],
     )
-
+    
     ms_xds = ps[
         "Antennae_North.cal.lsrk.split_0"
     ]
