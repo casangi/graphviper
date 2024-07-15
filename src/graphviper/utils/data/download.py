@@ -31,7 +31,7 @@ def version():
         logger.info(f'{file_meta_data["version"]}')
 
 
-def download(file: Union[str, list], folder: str = ".", threaded=True, n_threads=None) -> NoReturn:
+def download(file: Union[str, list], folder: str = ".", threaded: bool=True, n_threads: Union[None, int]=None) -> NoReturn:
     """
         Download tool for data stored externally.
     Parameters
