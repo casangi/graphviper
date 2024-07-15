@@ -27,6 +27,9 @@ from contextvars import ContextVar
 
 from typing import Union
 
+VERBOSE=True
+DEFAULT=False
+
 # global verbosity flag
 verbosity: Union[ContextVar[bool], ContextVar[None]] = ContextVar("message_verbosity", default=None)
 
