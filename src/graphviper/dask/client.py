@@ -1,11 +1,11 @@
-import psutil
-import multiprocessing
-import dask
 import os
-import dask_jobqueue
+import dask
+import psutil
 import logging
 import pathlib
 import distributed
+import dask_jobqueue
+import multiprocessing
 import graphviper.dask.menrva
 
 import graphviper.utils.parameter as parameter
@@ -16,6 +16,34 @@ from typing import Union, Dict
 
 colorize = console.Colorize()
 
+
+def get_client()->Union[None, distributed.Client]:
+    """
+    Get a graphviper client instance
+    Returns: None or a graphviper client instance
+
+    """
+    client = graphviper.dask.menrva.current_client.get()
+
+    if client is None:
+        logger.info("There are currently no client instances.")
+        return None
+
+    return client
+
+def get_cluster()->Union[None, distributed.LocalCluster]:
+    """
+    Get a graphviper cluster instance
+    Returns: None or a graphviper cluster instance
+
+    """
+    cluster = graphviper.dask.menrva.current_cluster.get()
+
+    if cluster is None:
+        logger.info("There are currently no cluster instances.")
+        return None
+
+    return cluster
 
 @parameter.validate()
 def local_client(
