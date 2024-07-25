@@ -12,17 +12,17 @@ def test_map_reduce():
     viper_client = local_client(cores=2, memory_limit="3GB", autorestrictor=True)
 
     ps_store = "Antennae_North.cal.lsrk.split.vis.zarr"
-    download(file=ps_store)
+    download(file=ps_store, threaded=False)
 
     from xradio.vis.read_processing_set import read_processing_set
 
     ps = read_processing_set(
         ps_store=ps_store,
         intents=["OBSERVE_TARGET#ON_SOURCE"],
-        fields=None,
     )
+    
     ms_xds = ps[
-        "Antennae_North.cal.lsrk.split_ddi_0_intent_OBSERVE_TARGET#ON_SOURCE_field_id_0"
+        "Antennae_North.cal.lsrk.split_0"
     ]
 
     from graphviper.graph_tools.coordinate_utils import make_parallel_coord
