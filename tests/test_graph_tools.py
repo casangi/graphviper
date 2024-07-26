@@ -94,7 +94,6 @@ def test_map_reduce():
 
     assert dask.compute(dask_graph)[0] == 44544495255.635056
 
-
 def test_ps_partition():
     import pathlib
 
@@ -105,7 +104,7 @@ def test_ps_partition():
     download(file=msv2name)
 
     from xradio.vis.convert_msv2_to_processing_set import convert_msv2_to_processing_set
-    partition_scheme = 'ddi_state_field'
+    partition_scheme = ['ddi_state_field']
     convert_msv2_to_processing_set(
         in_file=msv2name,
         out_file=zarrPath,
@@ -122,10 +121,10 @@ def test_ps_partition():
     # Let's try an empty parallel coord map first
     parallel_coords = {}
     node_task_data_mapping = interpolate_data_coords_onto_parallel_coords(parallel_coords,
-                                                                          ps, ps_partition=['spw'])
+                                                                          ps, ps_partition=['spectral_window_id'])
     assert len(node_task_data_mapping.keys()) == 2
     # We check that for each data selection the spw_id is unique:
-    spw_split_success = all([len(set([ps[k].frequency.spw_id for k in dm['data_selection'].keys()]))==1
+    spw_split_success = all([len(set([ps[k].attrs['partition_info']['spectral_window_id'] for k in dm['data_selection'].keys()]))==1
                                     for dm in node_task_data_mapping.values()])
     assert spw_split_success
 

@@ -5,7 +5,7 @@ import numpy as np
 import xarray as xr
 import graphviper.utils.logger as logger
 
-from typing import Dict, Union, Optional
+from typing import Dict, Union, Optional, Hashable
 from xradio.vis._processing_set import processing_set
 from scipy.interpolate import interp1d
 
@@ -223,7 +223,7 @@ def interpolate_data_coords_onto_parallel_coords(
         "next",
     } = "nearest",
     assume_sorted: bool = True,
-    ps_partition : Optional[str] = None # Current options are {'field', 'spw'}
+    ps_partition : Optional[str] = None # Current options are {'field_id', 'spectral_window_id'}
 ) -> Dict:
     """Interpolate data_coords onto parallel_coords to create the ``node_task_data_mapping``.
 
@@ -239,7 +239,7 @@ def interpolate_data_coords_onto_parallel_coords(
         The kind of interpolation method to use as described in `Scipy documentation <https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interp1d.html>`_ , by default ``nearest``.
     assume_sorted : bool, optional
         Are the data in parallel_coords and input_data monotonically increasing in value, by default True.
-    ps_partition : An optional list of strings ('spw' and/or 'field' are currently supported); if non-empty, the function will use the meta-data of each Dataset to partition the parallel sets by these pseudo-dimensions as well as the actual Dataset dimensions specified.
+    ps_partition : An optional list of strings ('spectral_window_id' and/or 'field_id' are currently supported); if non-empty, the function will use the meta-data of each Dataset to partition the parallel sets by these pseudo-dimensions as well as the actual Dataset dimensions specified.
     Returns
     -------
     Dict :
@@ -324,7 +324,7 @@ def interpolate_data_coords_onto_parallel_coords(
 
     if ps_partition == None:
         ps_partition = []
-    if ('spw' in ps_partition) and ('frequency' in parallel_coords):
+    if ('spectral_window_id' in ps_partition) and ('frequency' in parallel_coords):
         raise ValueError("Cannot split by both spw and frequency")
 
     if len(ps_partition) > 0:
@@ -525,14 +525,14 @@ def _make_iter_chunks_indices(parallel_coords: Dict):
 
 def _partition_ps_by_non_dimensions(ps, ps_partition_keys):
     "This requires at least one member of ps_partition_keys!"
-    ps_splittable = {
-        'spw' : lambda x: x.frequency.spw_id,
-        'field' : lambda x: x.field_info['field_id']
-    }
     ps_split_map = {}
     for name, xds in ps.items():
         for key in ps_partition_keys:
-            val_for_xds = ps_splittable[key](xds)
+            val_for_xds = xds.attrs['partition_info'][key]
+            # OK I think I can punt: the key should probably be an integer but that doesn't feel very Pythonic
+            # But I *can* reasonably demand it is hashable
+            if not isinstance(val_for_xds, Hashable):
+                raise ValueError("Can't split by {key}; value {val_for_xds} is not suitable for splitting")
             ps_split_map.setdefault(key, {}).setdefault(val_for_xds, []).append(name)
     d = {}
     # We loop over the cartersian product of the keys
