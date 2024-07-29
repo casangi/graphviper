@@ -122,7 +122,11 @@ def make_frequency_coord(
     }
 
 
-def make_parallel_coord(coord: Union[Dict, xr.DataArray], n_chunks:Union[None, int]=None, gap: Union[None, float]=None) -> Dict:
+def make_parallel_coord(
+    coord: Union[Dict, xr.DataArray],
+    n_chunks: Union[None, int] = None,
+    gap: Union[None, float] = None,
+) -> Dict:
     """Creates a single parallel coordinate from a `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ or a `xarray.DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_ with `measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_.
 
     This function only returns a single :ref:`parallel_coord <parallel coord>` to create :ref:`parallel_coords <parallel coords>` a dictionary must be created where the keys are the dimension coordinate names and the values are the respective :ref:`parallel_coord <parallel coord>`.
@@ -133,7 +137,7 @@ def make_parallel_coord(coord: Union[Dict, xr.DataArray], n_chunks:Union[None, i
         The input `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ or `xarray.DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_ with `measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_.
     n_chunks : Union[None, int]
         If specified, how many chunks to divide coord into.
-    
+
     gap : Union[None, float]
         If specified, gaps in coordinate values greater than the given value will be used to split chunks in the coordinate.
 
@@ -177,8 +181,10 @@ def make_parallel_coord(coord: Union[Dict, xr.DataArray], n_chunks:Union[None, i
     """
 
     if isinstance(coord, xr.core.dataarray.DataArray):
-        coord = coord.copy(deep=True).to_dict(data="array") #Deep copy so that we don't accidentally modify the xr.core.dataarray.DataArray. 
-       
+        coord = coord.copy(deep=True).to_dict(
+            data="array"
+        )  # Deep copy so that we don't accidentally modify the xr.core.dataarray.DataArray.
+
     parallel_coord = {}
     parallel_coord["data"] = coord["data"]
     if gap is None and n_chunks is not None:
@@ -188,25 +194,26 @@ def make_parallel_coord(coord: Union[Dict, xr.DataArray], n_chunks:Union[None, i
         )
     elif gap is not None and n_chunks is None:
         coord_data = coord["data"]
-        if len(coord_data.shape)>1:
+        if len(coord_data.shape) > 1:
             raise ValueError("Can only split one-dimensional array")
         nx = len(coord_data)
         dxs = coord_data[1:] - coord_data[:-1]
-        jumps0 = np.argwhere(dxs>gap).flatten()
-        jumps = [0]+list(jumps0) + [nx]
+        jumps0 = np.argwhere(dxs > gap).flatten()
+        jumps = [0] + list(jumps0) + [nx]
         data_chunk_edges = []
         data_chunks = {}
         for i, rnge in enumerate(itertools.pairwise(jumps)):
             i0, i1 = rnge
             data_chunks[i] = coord_data[i0:i1]
-            data_chunk_edges.extend([coord_data[i0], coord_data[i1-1]])
-        parallel_coord['data_chunks'] = data_chunks
-        parallel_coord['data_chunk_edges'] = data_chunk_edges
+            data_chunk_edges.extend([coord_data[i0], coord_data[i1 - 1]])
+        parallel_coord["data_chunks"] = data_chunks
+        parallel_coord["data_chunk_edges"] = data_chunk_edges
     else:
         raise ValueError("Exactly one of n_chunks and gap must be specified")
     parallel_coord["dims"] = coord["dims"]
     parallel_coord["attrs"] = coord["attrs"]
     return parallel_coord
+
 
 def interpolate_data_coords_onto_parallel_coords(
     parallel_coords: dict,
@@ -223,7 +230,9 @@ def interpolate_data_coords_onto_parallel_coords(
         "next",
     } = "nearest",
     assume_sorted: bool = True,
-    ps_partition : Optional[str] = None # Current options are {'field_name', 'spectral_window_name'}
+    ps_partition: Optional[
+        str
+    ] = None,  # Current options are {'field_name', 'spectral_window_name'}
 ) -> Dict:
     """Interpolate data_coords onto parallel_coords to create the ``node_task_data_mapping``.
 
@@ -324,15 +333,15 @@ def interpolate_data_coords_onto_parallel_coords(
 
     if ps_partition == None:
         ps_partition = []
-    if ('spectral_window_name' in ps_partition) and ('frequency' in parallel_coords):
+    if ("spectral_window_name" in ps_partition) and ("frequency" in parallel_coords):
         raise ValueError("Cannot split by both spw and frequency")
 
     if len(ps_partition) > 0:
         partition_map = _partition_ps_by_non_dimensions(input_data, ps_partition)
     else:
         # By default we iterate over everything
-        partition_map = {0 : [xds_name for xds_name in input_data]}
-                         
+        partition_map = {0: [xds_name for xds_name in input_data]}
+
     xds_data_selection = {}
 
     # Loop over every dataset and interpolate onto parallel_coords;
@@ -366,11 +375,17 @@ def interpolate_data_coords_onto_parallel_coords(
                 for chunk_index in sorted(pc["data_chunks"].keys()):
                     if interp_index[i] == -1 and interp_index[i + 1] == -1:
                         chunk_indx_start_stop[chunk_index] = slice(None)
-                        if (pc["data_chunks_edges"][i] < input_data[xds_name][dim][0])  and (pc["data_chunks_edges"][i+1] > input_data[xds_name][dim][-1]):
+                        if (
+                            pc["data_chunks_edges"][i] < input_data[xds_name][dim][0]
+                        ) and (
+                            pc["data_chunks_edges"][i + 1]
+                            > input_data[xds_name][dim][-1]
+                        ):
                             interp_index[i] = 0
-                            interp_index[i+1] = -2 
+                            interp_index[i + 1] = -2
                             chunk_indx_start_stop[chunk_index] = slice(
-                            interp_index[i], interp_index[i + 1] + 1)
+                                interp_index[i], interp_index[i + 1] + 1
+                            )
                     else:
                         if interp_index[i] == -1:
                             interp_index[i] = 0
@@ -416,7 +431,7 @@ def interpolate_data_coords_onto_parallel_coords(
             # breakpoint()
             node_task_data_mapping[task_id]["task_coords"] = task_coords
             partition_xds_names = partition_map[partition]
-            # For task_id get the selection slices for each dataset in the input data from xds_data_selection:            
+            # For task_id get the selection slices for each dataset in the input data from xds_data_selection:
             for xds_name in partition_xds_names:
                 node_task_data_mapping[task_id]["data_selection"][xds_name] = {}
                 empty_chunk = False
@@ -433,11 +448,11 @@ def interpolate_data_coords_onto_parallel_coords(
                     else:
                         empty_chunk = True
 
-                # 
+                #
                 if (
                     empty_chunk
                 ):  # The xds with xds_name has no data for the parallel chunk (no slice on one of the dims).
-                    del node_task_data_mapping[task_id]["data_selection"][xds_name] 
+                    del node_task_data_mapping[task_id]["data_selection"][xds_name]
             task_id += 1
             # breakpoint()
 
@@ -523,23 +538,29 @@ def _make_iter_chunks_indices(parallel_coords: Dict):
     iter_chunks_indxs = itertools.product(*list_chunk_indxs)
     return iter_chunks_indxs, parallel_dims
 
+
 def _partition_ps_by_non_dimensions(ps, ps_partition_keys):
     "This requires at least one member of ps_partition_keys!"
     ps_split_map = {}
     for name, xds in ps.items():
         for key in ps_partition_keys:
-            val_for_xds = xds.attrs['partition_info'][key]
+            val_for_xds = xds.attrs["partition_info"][key]
             # OK I think I can punt: the key should probably be an integer but that doesn't feel very Pythonic
             # But I *can* reasonably demand it is hashable
             if not isinstance(val_for_xds, Hashable):
-                raise ValueError("Can't split by {key}; value {val_for_xds} is not suitable for splitting")
+                raise ValueError(
+                    "Can't split by {key}; value {val_for_xds} is not suitable for splitting"
+                )
             ps_split_map.setdefault(key, {}).setdefault(val_for_xds, []).append(name)
     d = {}
     # We loop over the cartersian product of the keys
-    for multi_index in itertools.product(*[ps_split_map[key] for key in ps_partition_keys]):
+    for multi_index in itertools.product(
+        *[ps_split_map[key] for key in ps_partition_keys]
+    ):
         # And for each key we look up the corresponding set of xds names
-        sets = [set(ps_split_map[key][i]) for i, key in zip(multi_index, ps_partition_keys)]
+        sets = [
+            set(ps_split_map[key][i]) for i, key in zip(multi_index, ps_partition_keys)
+        ]
         d[multi_index] = set.intersection(*sets)
 
     return d
-

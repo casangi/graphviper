@@ -19,15 +19,15 @@ colorize = console.Colorize()
 
 @parameter.validate()
 def local_client(
-        cores: int = None,
-        memory_limit: str = None,
-        autorestrictor: bool = False,
-        dask_local_dir: str = None,
-        local_dir: str = None,
-        wait_for_workers: bool = True,
-        log_params: Union[None, Dict] = None,
-        worker_log_params: Union[None, Dict] = None,
-        serial_execution: bool = False
+    cores: int = None,
+    memory_limit: str = None,
+    autorestrictor: bool = False,
+    dask_local_dir: str = None,
+    local_dir: str = None,
+    wait_for_workers: bool = True,
+    log_params: Union[None, Dict] = None,
+    worker_log_params: Union[None, Dict] = None,
+    serial_execution: bool = False,
 ) -> Union[distributed.Client, None]:
     """ Setup dask cluster and logger.
 
@@ -91,14 +91,16 @@ def local_client(
     if log_params is None:
         log_params = {}
 
-    log_params = {**{
-        "logger_name": "client",
-        "log_to_term": True,
-        "log_level": "INFO",
-        "log_to_file": False,
-        "log_file": "client.log",
-    }, **log_params
-                  }
+    log_params = {
+        **{
+            "logger_name": "client",
+            "log_to_term": True,
+            "log_level": "INFO",
+            "log_to_file": False,
+            "log_file": "client.log",
+        },
+        **log_params,
+    }
 
     if worker_log_params is None:
         worker_log_params = {}
@@ -110,7 +112,8 @@ def local_client(
             "log_level": "INFO",
             "log_to_file": False,
             "log_file": "client_worker.log",
-        }, **worker_log_params
+        },
+        **worker_log_params,
     }
 
     # If the user wants to change the global logger name from the
@@ -175,13 +178,12 @@ def local_client(
         cores = multiprocessing.cpu_count()
 
     if memory_limit is None:
-        memory_limit = (
-            "".join((str(round((psutil.virtual_memory().available / (1024 ** 2)) / cores)), "MB"))
+        memory_limit = "".join(
+            (str(round((psutil.virtual_memory().available / (1024**2)) / cores)), "MB")
         )
 
     if not graphviper.dask.menrva.current_cluster.get() is None:
         cluster = graphviper.dask.menrva.current_cluster.get()
-
 
     else:
         cluster = distributed.LocalCluster(
@@ -221,10 +223,10 @@ def local_client(
 
 
 def distributed_client(
-        cluster: None,
-        dask_local_dir: str = None,
-        log_params: Union[None, Dict] = None,
-        worker_log_params: Union[None, Dict] = None,
+    cluster: None,
+    dask_local_dir: str = None,
+    log_params: Union[None, Dict] = None,
+    worker_log_params: Union[None, Dict] = None,
 ) -> Union[distributed.Client, None]:
     """ Setup dask cluster and logger.
 
@@ -272,14 +274,16 @@ def distributed_client(
     if log_params is None:
         log_params = {}
 
-    log_params = {**{
-        "logger_name": "client",
-        "log_to_term": True,
-        "log_level": "INFO",
-        "log_to_file": False,
-        "log_file": "client.log",
-    }, **log_params
-                  }
+    log_params = {
+        **{
+            "logger_name": "client",
+            "log_to_term": True,
+            "log_level": "INFO",
+            "log_to_file": False,
+            "log_file": "client.log",
+        },
+        **log_params,
+    }
 
     if worker_log_params is None:
         worker_log_params = {}
@@ -291,7 +295,8 @@ def distributed_client(
             "log_level": "INFO",
             "log_to_file": False,
             "log_file": "client_worker.log",
-        }, **worker_log_params
+        },
+        **worker_log_params,
     }
 
     # If the user wants to change the global logger name from the
@@ -319,22 +324,22 @@ def distributed_client(
 
 
 def slurm_cluster_client(
-        workers_per_node: int,
-        cores_per_node: int,
-        memory_per_node: str,
-        number_of_nodes: int,
-        queue: str,
-        interface: str,
-        python_env_dir: str,
-        dask_local_dir: str,
-        dask_log_dir: str,
-        exclude_nodes: str = "",
-        dashboard_port: int = 8787,
-        local_dir: str = None,
-        autorestrictor: bool = False,
-        wait_for_workers: bool = True,
-        log_params: Union[None, Dict] = None,
-        worker_log_params: Union[None, Dict] = None,
+    workers_per_node: int,
+    cores_per_node: int,
+    memory_per_node: str,
+    number_of_nodes: int,
+    queue: str,
+    interface: str,
+    python_env_dir: str,
+    dask_local_dir: str,
+    dask_log_dir: str,
+    exclude_nodes: str = "",
+    dashboard_port: int = 8787,
+    local_dir: str = None,
+    autorestrictor: bool = False,
+    wait_for_workers: bool = True,
+    log_params: Union[None, Dict] = None,
+    worker_log_params: Union[None, Dict] = None,
 ):
     """Creates a Dask slurm_cluster_client on a multinode cluster.
 
@@ -453,11 +458,7 @@ def slurm_cluster_client(
 
     if local_cache or autorestrictor:
         dask.config.set(
-            {
-                "distributed.scheduler.preload": os.path.join(
-                    plugin_path, "scheduler.py"
-                )
-            }
+            {"distributed.scheduler.preload": os.path.join(plugin_path, "scheduler.py")}
         )
         dask.config.set(
             {

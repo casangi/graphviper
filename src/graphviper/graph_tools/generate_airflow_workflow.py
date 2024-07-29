@@ -1,37 +1,47 @@
-def generate_airflow_workflow(viper_graph,dag_id='0',schedule_interval=None,filename='airflow_dag_test.py',dag_name='map_reduce'):
+def generate_airflow_workflow(
+    viper_graph,
+    dag_id="0",
+    schedule_interval=None,
+    filename="airflow_dag_test.py",
+    dag_name="map_reduce",
+):
 
     import inspect
-    map_node_task_str = inspect.getsource(viper_graph['map']['node_task']).replace('\n','\n    ')
-    map_node_task_name = viper_graph['map']['node_task'].__name__
-    map_input_params = str(viper_graph['map']['input_params'])
 
-    reduce_code_str=''
-    if 'reduce' in viper_graph:
-        reduce_mode = viper_graph['reduce']['mode']
-        reduce_input_params = str(viper_graph['reduce']['input_params'])
-        reduce_node_task_name = viper_graph['reduce']['node_task'].__name__
+    map_node_task_str = inspect.getsource(viper_graph["map"]["node_task"]).replace(
+        "\n", "\n    "
+    )
+    map_node_task_name = viper_graph["map"]["node_task"].__name__
+    map_input_params = str(viper_graph["map"]["input_params"])
 
-        if reduce_mode == 'single_node':
-            reduce_mode_code_str=f'''
+    reduce_code_str = ""
+    if "reduce" in viper_graph:
+        reduce_mode = viper_graph["reduce"]["mode"]
+        reduce_input_params = str(viper_graph["reduce"]["input_params"])
+        reduce_node_task_name = viper_graph["reduce"]["node_task"].__name__
+
+        if reduce_mode == "single_node":
+            reduce_mode_code_str = f"""
     {reduce_node_task_name}(map_results_list,{reduce_input_params})
-            '''
+            """
         else:
             assert False, "Usupported reduce mode."
 
-        reduce_node_task_str = inspect.getsource(viper_graph['reduce']['node_task']).replace('\n','\n    ')
-        reduce_code_str=f'''
+        reduce_node_task_str = inspect.getsource(
+            viper_graph["reduce"]["node_task"]
+        ).replace("\n", "\n    ")
+        reduce_code_str = f"""
     @task
     {reduce_node_task_str}
     {reduce_mode_code_str}
-        '''
+        """
 
+    # print(len(viper_graph['map']['input_params']))
+    # print(viper_graph['map']['input_params'])
+    # print(repr(map_node_task_str))
+    # print('****')
 
-    #print(len(viper_graph['map']['input_params']))
-    #print(viper_graph['map']['input_params'])
-    #print(repr(map_node_task_str))
-    #print('****')
-
-    python_code_string=f'''
+    python_code_string = f"""
 import pendulum
 from airflow.decorators import dag, task
 
@@ -53,41 +63,15 @@ def {dag_name}():
     {reduce_code_str}
         
 {dag_name}()
-    '''
+    """
 
-    airflow_dag_file = open(filename, 'w')
+    airflow_dag_file = open(filename, "w")
     airflow_dag_file.write(python_code_string)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    #for i, node in enumerate(viper_graph['map']):
-    #    map_results.append(PythonOperator(task_id=node['node_task'].__name__+'_'+str(i),python_callable=node['node_task'],op_args={'input_params':node['input_params']}))    
+    # for i, node in enumerate(viper_graph['map']):
+    #    map_results.append(PythonOperator(task_id=node['node_task'].__name__+'_'+str(i),python_callable=node['node_task'],op_args={'input_params':node['input_params']}))
     #    @task()
     #    {reduce_node_task_str}
-
-
-
-
-
 
 
 # from airflow import DAG
@@ -122,9 +106,8 @@ def {dag_name}():
 #     return dask.delayed(reduce_node_task)(graph, input_params)
 
 
-
 # def generate_airflow_workflow(viper_graph,dag_id='0',schedule_interval=None,filename='airflow_dag_test.py'):
-    
+
 #     default_args = {
 #       'owner': 'airflow',
 #       'start_date': pendulum.datetime(2021, 1, 1, tz="UTC"),
@@ -137,7 +120,7 @@ def {dag_name}():
 #     ) as dag:
 #         map_results = []
 #         for i, node in enumerate(viper_graph['map']):
-#             map_results.append(PythonOperator(task_id=node['node_task'].__name__+'_'+str(i),python_callable=node['node_task'],op_args={'input_params':node['input_params']}))    
+#             map_results.append(PythonOperator(task_id=node['node_task'].__name__+'_'+str(i),python_callable=node['node_task'],op_args={'input_params':node['input_params']}))
 
 #         if 'reduce' in viper_graph:
 #             if viper_graph['reduce']['mode'] == "tree":
@@ -159,7 +142,7 @@ def {dag_name}():
 #         #     a = 42+i
 #         #     logger.info('Task i ' + str(i))
 #         #     return a
-        
+
 #         # @task()
 #         # def reduce_task(q):
 #         #     import numpy as np
@@ -176,13 +159,9 @@ def {dag_name}():
 #         # logger.info('2. The sum is ' + str(sum))
 
 
-
-
-
-
 #     # dask_graph = []
 #     # for node in viper_graph['map']:
-#     #     dask_graph.append(dask.delayed(node['node_task'])(dask.delayed(node['input_params'])))    
+#     #     dask_graph.append(dask.delayed(node['node_task'])(dask.delayed(node['input_params'])))
 
 #     # if 'reduce' in viper_graph:
 #     #     if viper_graph['reduce']['mode'] == "tree":
@@ -191,9 +170,6 @@ def {dag_name}():
 #     #         dask_graph = _single_node(dask_graph, viper_graph['reduce']['node_task'], viper_graph['reduce']['input_params'])
 
 #     return dag
-
-
-
 
 
 # Function to generate graphviz representation of the DAG
@@ -208,7 +184,8 @@ def airflow_dag_to_graphviz(dag):
     A graphviz.Digraph object representing the DAG.
     """
     from graphviz import Digraph
-    dot = Digraph(comment=f'Airflow DAG - {dag.dag_id}')
+
+    dot = Digraph(comment=f"Airflow DAG - {dag.dag_id}")
 
     # Add nodes (tasks)
     for task in dag.tasks:
