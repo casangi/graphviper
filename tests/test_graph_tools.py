@@ -18,7 +18,7 @@ def test_map_reduce():
 
     ps = read_processing_set(
         ps_store=ps_store,
-        intents=["OBSERVE_TARGET#ON_SOURCE"],
+        obs_modes=["OBSERVE_TARGET#ON_SOURCE"],
     )
     
     ms_xds = ps[
@@ -104,15 +104,16 @@ def test_ps_partition():
     download(file=msv2name)
 
     from xradio.vis.convert_msv2_to_processing_set import convert_msv2_to_processing_set
-    partition_scheme = ['ddi_state_field']
     convert_msv2_to_processing_set(
         in_file=msv2name,
         out_file=zarrPath,
-        partition_scheme=partition_scheme,
+        partition_scheme=[],
         overwrite=True)
 
     from xradio.vis.read_processing_set import read_processing_set
     ps = read_processing_set(zarrPath)
+    
+    #print(ps.summary())
     
     from graphviper.graph_tools.coordinate_utils import (
         interpolate_data_coords_onto_parallel_coords,
@@ -121,10 +122,12 @@ def test_ps_partition():
     # Let's try an empty parallel coord map first
     parallel_coords = {}
     node_task_data_mapping = interpolate_data_coords_onto_parallel_coords(parallel_coords,
-                                                                          ps, ps_partition=['spectral_window_id'])
+                                                                          ps, ps_partition=['spectral_window_name'])
+    
+    #print(node_task_data_mapping)
     assert len(node_task_data_mapping.keys()) == 2
     # We check that for each data selection the spw_id is unique:
-    spw_split_success = all([len(set([ps[k].attrs['partition_info']['spectral_window_id'] for k in dm['data_selection'].keys()]))==1
+    spw_split_success = all([len(set([ps[k].attrs['partition_info']['spectral_window_name'] for k in dm['data_selection'].keys()]))==1
                                     for dm in node_task_data_mapping.values()])
     assert spw_split_success
 

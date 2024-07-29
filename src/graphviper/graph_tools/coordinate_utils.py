@@ -223,7 +223,7 @@ def interpolate_data_coords_onto_parallel_coords(
         "next",
     } = "nearest",
     assume_sorted: bool = True,
-    ps_partition : Optional[str] = None # Current options are {'field_id', 'spectral_window_id'}
+    ps_partition : Optional[str] = None # Current options are {'field_name', 'spectral_window_name'}
 ) -> Dict:
     """Interpolate data_coords onto parallel_coords to create the ``node_task_data_mapping``.
 
@@ -239,7 +239,7 @@ def interpolate_data_coords_onto_parallel_coords(
         The kind of interpolation method to use as described in `Scipy documentation <https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interp1d.html>`_ , by default ``nearest``.
     assume_sorted : bool, optional
         Are the data in parallel_coords and input_data monotonically increasing in value, by default True.
-    ps_partition : An optional list of strings ('spectral_window_id' and/or 'field_id' are currently supported); if non-empty, the function will use the meta-data of each Dataset to partition the parallel sets by these pseudo-dimensions as well as the actual Dataset dimensions specified.
+    ps_partition : An optional list of strings ('spectral_window_name' and/or 'field_name' are currently supported); if non-empty, the function will use the meta-data of each Dataset to partition the parallel sets by these pseudo-dimensions as well as the actual Dataset dimensions specified.
     Returns
     -------
     Dict :
@@ -324,7 +324,7 @@ def interpolate_data_coords_onto_parallel_coords(
 
     if ps_partition == None:
         ps_partition = []
-    if ('spectral_window_id' in ps_partition) and ('frequency' in parallel_coords):
+    if ('spectral_window_name' in ps_partition) and ('frequency' in parallel_coords):
         raise ValueError("Cannot split by both spw and frequency")
 
     if len(ps_partition) > 0:
@@ -540,5 +540,6 @@ def _partition_ps_by_non_dimensions(ps, ps_partition_keys):
         # And for each key we look up the corresponding set of xds names
         sets = [set(ps_split_map[key][i]) for i, key in zip(multi_index, ps_partition_keys)]
         d[multi_index] = set.intersection(*sets)
+
     return d
 
