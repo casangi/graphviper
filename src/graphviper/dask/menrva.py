@@ -155,7 +155,7 @@ class MenrvaClient(distributed.Client):
                 from distributed import Client
                 client = Client.current()
 
-            except:  # Using default Dask schedular.
+            except ValueError:  # Using default Dask schedular.
                 logger.warning("Couldn't find a current client instance, calculating thread information based on current system.")
 
                 cpu_cores = psutil.cpu_count()

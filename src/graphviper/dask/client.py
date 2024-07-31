@@ -16,7 +16,7 @@ from typing import Union, Dict
 
 colorize = console.Colorize()
 
-def get_thread_info():
+def get_thread_info()->Dict[str, float]:
     # This just brings the built-in thread info function into the client module.
     return graphviper.dask.menrva.MenrvaClient.thread_info()
 
