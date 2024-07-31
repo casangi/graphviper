@@ -28,6 +28,21 @@ current_client: Union[ContextVar[distributed.Client], ContextVar[None]] = Contex
 current_cluster: Union[ContextVar[distributed.LocalCluster], ContextVar[None]] = ContextVar("current_cluster", default=None)
 
 
+def _prime_factors(n):
+    i = 2
+    factors = []
+    while i * i <= n:
+        if n % i:
+            i += 1
+        else:
+            n //= i
+            factors.append(i)
+
+    if n > 1:
+        factors.append(n)
+
+    return factors
+
 class MenrvaClient(distributed.Client):
     """
     This and extended version of the general Dask distributed client that will allow for
@@ -109,7 +124,9 @@ class MenrvaClient(distributed.Client):
         if self.status in ["closed", "newly-created"]:
             if self.asynchronous:
                 return NoOpAwaitable()
+
             return
+
         self.status = "closing"
 
         with suppress(AttributeError):
@@ -127,6 +144,52 @@ class MenrvaClient(distributed.Client):
 
         if not self._is_finalizing():
             self._loop_runner.stop()
+
+    @staticmethod
+    def get_thread_info():#, client=None):
+        client = None
+
+        if current_client.get() is None:
+            try:
+                from distributed import Client
+                client = Client.current()
+
+            except:  # Using default Dask schedular.
+
+                import psutil
+                cpu_cores = psutil.cpu_count()
+                total_memory = psutil.virtual_memory().total / (1024 ** 3)
+
+                thread_info = {
+                    'n_threads': cpu_cores,
+                    'memory_per_thread': total_memory / cpu_cores
+                }
+
+                return thread_info
+
+        memory_per_thread = -1
+        n_threads = 0
+
+        # client.cluster only exists for LocalCluster
+        if current_cluster.get() is None:
+            worker_items = client.scheduler_info()['workers'].items()
+
+        else:
+            worker_items = client.cluster.scheduler_info['workers'].items()
+
+        for worker_name, worker in worker_items:
+            temp_memory_per_thread = (worker['memory_limit'] / worker['nthreads']) / (1024 ** 3)
+            n_threads = n_threads + worker['nthreads']
+
+            if (memory_per_thread == -1) or (memory_per_thread > temp_memory_per_thread):
+                memory_per_thread = temp_memory_per_thread
+
+        thread_info = {
+            'n_threads': n_threads,
+            'memory_per_thread': memory_per_thread
+        }
+
+        return thread_info
 
     @staticmethod
     def call(func: Callable, *args: Tuple[Any], **kwargs: Dict[str, Any]):
