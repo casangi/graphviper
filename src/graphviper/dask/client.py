@@ -26,7 +26,11 @@ def get_client()->Union[None, distributed.Client]:
     Returns: None or a graphviper client instance
 
     """
-    client = distributed.Client()
+    try:
+        client = distributed.Client.current()
+
+    except ValueError:
+        client = None
 
     if client is None:
         logger.info("There are currently no client instances.")
@@ -43,7 +47,7 @@ def get_cluster()->Union[None, distributed.LocalCluster]:
     cluster = None
 
     if get_client() is not None:
-        cluster = distributed.Client().cluster
+        cluster = distributed.Client.current().cluster
 
     if cluster is None:
         logger.info("There are currently no cluster instances.")
