@@ -16,11 +16,13 @@ from typing import Union, Dict
 
 colorize = console.Colorize()
 
-def get_thread_info()->Dict[str, float]:
+
+def get_thread_info() -> Dict[str, float]:
     # This just brings the built-in thread info function into the client module.
     return graphviper.dask.menrva.MenrvaClient.thread_info()
 
-def get_client()->Union[None, distributed.Client]:
+
+def get_client() -> Union[None, distributed.Client]:
     """
     Get a graphviper client instance
     Returns: None or a graphviper client instance
@@ -38,7 +40,8 @@ def get_client()->Union[None, distributed.Client]:
 
     return client
 
-def get_cluster()->Union[None, distributed.LocalCluster]:
+
+def get_cluster() -> Union[None, distributed.LocalCluster]:
     """
     Get a graphviper cluster instance
     Returns: None or a graphviper cluster instance
@@ -55,17 +58,18 @@ def get_cluster()->Union[None, distributed.LocalCluster]:
 
     return cluster
 
+
 @parameter.validate()
 def local_client(
-    cores: int = None,
-    memory_limit: str = None,
-    autorestrictor: bool = False,
-    dask_local_dir: str = None,
-    local_dir: str = None,
-    wait_for_workers: bool = True,
-    log_params: Union[None, Dict] = None,
-    worker_log_params: Union[None, Dict] = None,
-    serial_execution: bool = False,
+        cores: int = None,
+        memory_limit: str = None,
+        autorestrictor: bool = False,
+        dask_local_dir: str = None,
+        local_dir: str = None,
+        wait_for_workers: bool = True,
+        log_params: Union[None, Dict] = None,
+        worker_log_params: Union[None, Dict] = None,
+        serial_execution: bool = False,
 ) -> Union[distributed.Client, None]:
     """ Setup dask cluster and logger.
 
@@ -217,7 +221,7 @@ def local_client(
 
     if memory_limit is None:
         memory_limit = "".join(
-            (str(round((psutil.virtual_memory().available / (1024**2)) / cores)), "MB")
+            (str(round((psutil.virtual_memory().available / (1024 ** 2)) / cores)), "MB")
         )
 
     try:
@@ -261,10 +265,10 @@ def local_client(
 
 
 def distributed_client(
-    cluster: None,
-    dask_local_dir: str = None,
-    log_params: Union[None, Dict] = None,
-    worker_log_params: Union[None, Dict] = None,
+        cluster: None,
+        dask_local_dir: str = None,
+        log_params: Union[None, Dict] = None,
+        worker_log_params: Union[None, Dict] = None,
 ) -> Union[distributed.Client, None]:
     """ Setup dask cluster and logger.
 
@@ -362,22 +366,22 @@ def distributed_client(
 
 
 def slurm_cluster_client(
-    workers_per_node: int,
-    cores_per_node: int,
-    memory_per_node: str,
-    number_of_nodes: int,
-    queue: str,
-    interface: str,
-    python_env_dir: str,
-    dask_local_dir: str,
-    dask_log_dir: str,
-    exclude_nodes: str = "",
-    dashboard_port: int = 8787,
-    local_dir: str = None,
-    autorestrictor: bool = False,
-    wait_for_workers: bool = True,
-    log_params: Union[None, Dict] = None,
-    worker_log_params: Union[None, Dict] = None,
+        workers_per_node: int,
+        cores_per_node: int,
+        memory_per_node: str,
+        number_of_nodes: int,
+        queue: str,
+        interface: str,
+        python_env_dir: str,
+        dask_local_dir: str,
+        dask_log_dir: str,
+        exclude_nodes: str = "",
+        dashboard_port: int = 8787,
+        local_dir: str = None,
+        autorestrictor: bool = False,
+        wait_for_workers: bool = True,
+        log_params: Union[None, Dict] = None,
+        worker_log_params: Union[None, Dict] = None,
 ):
     """Creates a Dask slurm_cluster_client on a multinode cluster.
 
