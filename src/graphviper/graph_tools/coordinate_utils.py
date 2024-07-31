@@ -215,6 +215,45 @@ def make_parallel_coord(
     return parallel_coord
 
 
+def make_parallel_coord_by_gap(coord: Union[Dict, xr.DataArray],
+                               gap: float)-> Dict: 
+    """Creates a single parallel coordinate from from a `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ or a `xarray.DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_ with `measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_.
+
+    This function only returns a single :ref:`parallel_coord <parallel coord>`; to create :ref:`parallel_coords <parallel coords>` a dictionary must be created where the keys are the dimension coordinate names and the values are the respective :ref:`parallel_coord <parallel coord>`.
+    
+    Parameters
+    ----------
+    coord : Union[Dict, xr.DataArray]
+        The input `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ or `xarray.DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_ with `measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_.
+    gap : float
+      The coordinate will be split into chunks where successive values (which are assumed to be monotonically increasing) are more than `gap` apart.
+    """
+    if isinstance(coord, xr.core.dataarray.DataArray):
+        coord = coord.copy(deep=True).to_dict()
+    parallel_coord = {}
+    coord_data = np.array(coord['data'])
+    if len(coord_data.shape)>1:
+        raise ValueError
+
+    nx = len(coord_data)
+    dxs = coord_data[1:] - coord_data[:-1]
+    jumps0 = np.argwhere(dxs>gap).flatten()
+    jumps = [0]+list(jumps0) + [nx]
+    data_chunk_edges = []
+    data_chunks = {}
+    for i, rnge in enumerate(itertools.pairwise(jumps)):
+        i0, i1 = rnge
+        data_chunks[i] = coord_data[range(*rnge)]
+        data_chunk_edges.extend([coord_data[i0], coord_data[i1-1]])
+        parallel_coord['data_chunks'] = data_chunks
+        parallel_coord['data_chunk_edges'] = data_chunk_edges
+        parallel_coord['data'] = coord_data
+        parallel_coord['dims'] = coord['dims']
+        parallel_coord['attrs'] = coord['attrs']
+    return parallel_coord
+
+
+
 def interpolate_data_coords_onto_parallel_coords(
     parallel_coords: dict,
     input_data: Union[Dict, processing_set],
