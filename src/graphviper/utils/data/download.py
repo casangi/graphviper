@@ -31,7 +31,12 @@ def version():
         logger.info(f'{file_meta_data["version"]}')
 
 
-def download(file: Union[str, list], folder: str = ".", threaded: bool=True, n_threads: Union[None, int]=None) -> NoReturn:
+def download(
+    file: Union[str, list],
+    folder: str = ".",
+    threaded: bool = True,
+    n_threads: Union[None, int] = None,
+) -> NoReturn:
     """
         Download tool for data stored externally.
     Parameters
@@ -53,7 +58,9 @@ def download(file: Union[str, list], folder: str = ".", threaded: bool=True, n_t
     graphviper.utils.data.update()
 
     if not pathlib.Path(folder).resolve().exists():
-        graphviper.utils.logger.info(f"Creating path:{colorize.blue(str(pathlib.Path(folder).resolve()))}")
+        graphviper.utils.logger.info(
+            f"Creating path:{colorize.blue(str(pathlib.Path(folder).resolve()))}"
+        )
         pathlib.Path(folder).resolve().mkdir()
 
     if threaded is False:
@@ -73,11 +80,7 @@ def download(file: Union[str, list], folder: str = ".", threaded: bool=True, n_t
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=n_threads) as executor:
             for _file in file:
-                executor.submit(
-                    _download,
-                    _file,
-                    folder
-                )
+                executor.submit(_download, _file, folder)
 
 
 def list_files():
@@ -131,9 +134,7 @@ def get_files():
 
 
 def update():
-    meta_data_path = pathlib.Path(__file__).parent.joinpath(
-        ".dropbox"
-    )
+    meta_data_path = pathlib.Path(__file__).parent.joinpath(".dropbox")
 
     _makedir(str(pathlib.Path(__file__).parent), ".dropbox")
 
@@ -154,10 +155,10 @@ def update():
         file="file.download.json",
         folder=str(meta_data_path),
         file_meta_data=file_meta_data,
-        bar=False
+        bar=False,
     )
 
-    #assert meta_data_path.exists() is True, logger.error("Unable to retrieve download metadata.")
+    # assert meta_data_path.exists() is True, logger.error("Unable to retrieve download metadata.")
 
 
 def _get_usable_threads(n_files: int) -> int:
@@ -226,13 +227,20 @@ def _get_from_dropbox(file: str, folder: str, file_meta_data: dict, bar=True) ->
     else:
         from tqdm import tqdm
 
-    print(' ', end='', flush=True)
+    print(" ", end="", flush=True)
 
     # Is there a cleaner way to do this?
     if bar:
-        with open(fullname, "wb") as fd, tqdm(
-                desc=fullname, total=total, unit="iB", unit_scale=True, unit_divisor=1024
-        ) as bar:
+        with (
+            open(fullname, "wb") as fd,
+            tqdm(
+                desc=fullname,
+                total=total,
+                unit="iB",
+                unit_scale=True,
+                unit_divisor=1024,
+            ) as bar,
+        ):
             for chunk in r.iter_content(chunk_size=1024):
                 if chunk:
                     size = fd.write(chunk)
@@ -277,15 +285,18 @@ def _download(file: str, folder: str = ".") -> NoReturn:
 
         if file not in file_meta_data["metadata"].keys():
             logger.error("Requested file not found: {file}")
-            logger.info(f"For a list of available files try using "
-                        f"{colorize.blue('graphviper.utils.data.list_files()')}.")
+            logger.info(
+                f"For a list of available files try using "
+                f"{colorize.blue('graphviper.utils.data.list_files()')}."
+            )
 
             return
 
     else:
 
         logger.wanring(
-            f"Couldn't find file metadata locally in {colorize.blue(str(meta_data_path))}, trying to retrieve ...")
+            f"Couldn't find file metadata locally in {colorize.blue(str(meta_data_path))}, trying to retrieve ..."
+        )
 
         graphviper.utils.data.update()
 
@@ -307,13 +318,17 @@ def _makedir(path, folder):
     p = pathlib.Path(path).joinpath(folder)
     try:
         p.mkdir()
-        logger.info(f"Creating path:{colorize.blue(str(pathlib.Path(folder).resolve()))}")
+        logger.info(
+            f"Creating path:{colorize.blue(str(pathlib.Path(folder).resolve()))}"
+        )
 
     except FileExistsError:
         logger.warning(f"File exists: {colorize.blue(str(p.resolve()))}")
 
     except FileNotFoundError:
-        logger.warning(f"One fo the parent directories cannot be found: {colorize.blue(str(p.resolve()))}")
+        logger.warning(
+            f"One fo the parent directories cannot be found: {colorize.blue(str(p.resolve()))}"
+        )
 
 
 def _verify_metadata_file():
@@ -322,5 +337,5 @@ def _verify_metadata_file():
     )
 
     if not meta_data_path.exists():
-        logger.warning(f'Couldn\'t find {colorize.blue(meta_data_path)}.')
+        logger.warning(f"Couldn't find {colorize.blue(meta_data_path)}.")
         update()

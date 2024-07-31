@@ -91,7 +91,7 @@ def map(
     input_param_list = []
     # Create a node in Dask graph for each task_id in node_task_data_mapping
     for task_id, node_task_parameters in node_task_data_mapping.items():
-        #logger.debug('Task id: ' + str(task_id) + ", " + str(node_task_parameters.keys()))
+        # logger.debug('Task id: ' + str(task_id) + ", " + str(node_task_parameters.keys()))
 
         input_params.update(node_task_parameters)
         input_params["task_id"] = task_id
@@ -108,15 +108,16 @@ def map(
             input_params["viper_local_dir"] = viper_local_dir
             node_ip = nodes_ip_list[tasks_to_node_map[task_id]]
             input_params["node_ip"] = node_ip
-            #with dask.annotate(resources={node_ip: 1}):
-            #    graph_list.append(dask.delayed(node_task)(dask.delayed(input_params)))    
+            # with dask.annotate(resources={node_ip: 1}):
+            #    graph_list.append(dask.delayed(node_task)(dask.delayed(input_params)))
         else:
             input_params["date_time"] = None
         input_param_list.append(copy.deepcopy(input_params))
 
-    graph = {'map':{'node_task':node_task,'input_params':input_param_list}}
+    graph = {"map": {"node_task": node_task, "input_params": input_param_list}}
 
     return graph
+
 
 def _select_data(input_data, data_selection):
     if isinstance(input_data, processing_set):

@@ -25,8 +25,12 @@ from typing import Callable, Tuple, Dict, Any, Union
 
 colorize = console.Colorize()
 
-current_client: Union[ContextVar[distributed.Client], ContextVar[None]] = ContextVar("current_client", default=None)
-current_cluster: Union[ContextVar[distributed.LocalCluster], ContextVar[None]] = ContextVar("current_cluster", default=None)
+current_client: Union[ContextVar[distributed.Client], ContextVar[None]] = ContextVar(
+    "current_client", default=None
+)
+current_cluster: Union[ContextVar[distributed.LocalCluster], ContextVar[None]] = (
+    ContextVar("current_cluster", default=None)
+)
 
 
 def _prime_factors(n):
@@ -53,7 +57,7 @@ class MenrvaClient(distributed.Client):
     _is_finalizing: Union[list, bool] = staticmethod(sys.is_finalizing)
 
     def __new__(cls, *args, **kwargs):
-        if not hasattr(cls, '_instance'):
+        if not hasattr(cls, "_instance"):
             cls._instance = super(MenrvaClient, cls).__new__(cls)
             current_client.set(cls._instance)
 
@@ -86,13 +90,13 @@ class MenrvaClient(distributed.Client):
     def shutdown(self):
         """Shut down the connected scheduler and workers
 
-               Note, this may disrupt other clients that may be using the same
-               scheduler and workers.
+        Note, this may disrupt other clients that may be using the same
+        scheduler and workers.
 
-               See Also
-               --------
-               Client.close : close only this client
-               """
+        See Also
+        --------
+        Client.close : close only this client
+        """
         current_client.set(None)
         current_cluster.set(None)
 
@@ -203,7 +207,7 @@ class MenrvaClient(distributed.Client):
 
     @staticmethod
     def instantiate_module(
-            plugin: str, plugin_file: str, *args: Tuple[Any], **kwargs: Dict[str, Any]
+        plugin: str, plugin_file: str, *args: Tuple[Any], **kwargs: Dict[str, Any]
     ) -> WorkerPlugin:
         """
 
@@ -225,12 +229,12 @@ class MenrvaClient(distributed.Client):
             return MenrvaClient.call(plugin_instance, *args, **kwargs)
 
     def load_plugin(
-            self,
-            directory: str,
-            plugin: str,
-            name: str,
-            *args: Union[Tuple[Any], Any],
-            **kwargs: Union[Dict[str, Any], Any],
+        self,
+        directory: str,
+        plugin: str,
+        name: str,
+        *args: Union[Tuple[Any], Any],
+        **kwargs: Union[Dict[str, Any], Any],
     ):
         plugin_file = ".".join((plugin, "py"))
         if pathlib.Path(directory).joinpath(plugin_file).exists():
@@ -285,7 +289,7 @@ def close_port(port):
 
     for proc in process_iter():
         try:
-            for conns in proc.connections(kind='inet'):
+            for conns in proc.connections(kind="inet"):
                 if conns.laddr.port == port:
                     proc.send_signal(SIGKILL)
                     continue

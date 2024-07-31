@@ -29,8 +29,16 @@ def reduce(
         List of a single `dask.delayed <https://docs.dask.org/en/latest/delayed-api.html>`_ objects that represent the ``reduce`` Dask graph.
     """
     if mode == "tree":
-        graph['reduce'] = {'mode':'tree','node_task':reduce_node_task,'input_params':input_params}
+        graph["reduce"] = {
+            "mode": "tree",
+            "node_task": reduce_node_task,
+            "input_params": input_params,
+        }
     elif mode == "single_node":
-        graph['reduce'] = {'mode':'single_node','node_task':reduce_node_task,'input_params':input_params}
+        graph["reduce"] = {
+            "mode": "single_node",
+            "node_task": reduce_node_task,
+            "input_params": input_params,
+        }
 
     return graph

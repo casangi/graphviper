@@ -22,7 +22,12 @@ if os.path.exists(os.path.dirname(__file__) + "/config/"):
         os.environ["PARAMETER_CONFIG_PATH"] = os.path.dirname(__file__) + "/config/"
 
     else:
-        if os.path.dirname(__file__) + "/config/" not in os.getenv("PARAMETER_CONFIG_PATH"):
+        if os.path.dirname(__file__) + "/config/" not in os.getenv(
+            "PARAMETER_CONFIG_PATH"
+        ):
             os.environ["PARAMETER_CONFIG_PATH"] = ":".join(
-                (os.environ["PARAMETER_CONFIG_PATH"], os.path.dirname(__file__) + "/config/")
+                (
+                    os.environ["PARAMETER_CONFIG_PATH"],
+                    os.path.dirname(__file__) + "/config/",
+                )
             )
