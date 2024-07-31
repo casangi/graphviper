@@ -1,5 +1,6 @@
 import sys
 
+import psutil
 import distributed
 import inspect
 import importlib
@@ -146,17 +147,17 @@ class MenrvaClient(distributed.Client):
             self._loop_runner.stop()
 
     @staticmethod
-    def get_thread_info():#, client=None):
-        client = None
+    def thread_info():
+        client = current_client.get()
 
-        if current_client.get() is None:
+        if client is None:
             try:
                 from distributed import Client
                 client = Client.current()
 
             except:  # Using default Dask schedular.
+                logger.warning("Couldn't find a current client instance, calculating thread information based on current system.")
 
-                import psutil
                 cpu_cores = psutil.cpu_count()
                 total_memory = psutil.virtual_memory().total / (1024 ** 3)
 
