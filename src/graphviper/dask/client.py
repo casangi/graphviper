@@ -26,7 +26,7 @@ def get_client()->Union[None, distributed.Client]:
     Returns: None or a graphviper client instance
 
     """
-    client = graphviper.dask.menrva.current_client.get()
+    client = distributed.Client()
 
     if client is None:
         logger.info("There are currently no client instances.")
@@ -40,7 +40,10 @@ def get_cluster()->Union[None, distributed.LocalCluster]:
     Returns: None or a graphviper cluster instance
 
     """
-    cluster = graphviper.dask.menrva.current_cluster.get()
+    cluster = None
+
+    if get_client() is not None:
+        cluster = distributed.Client().cluster
 
     if cluster is None:
         logger.info("There are currently no cluster instances.")
@@ -213,10 +216,14 @@ def local_client(
             (str(round((psutil.virtual_memory().available / (1024**2)) / cores)), "MB")
         )
 
-    if not graphviper.dask.menrva.current_cluster.get() is None:
-        cluster = graphviper.dask.menrva.current_cluster.get()
+    #if not graphviper.dask.menrva.current_cluster.get() is None:
+    #    cluster = graphviper.dask.menrva.current_cluster.get()
 
-    else:
+    try:
+        cluster = distributed.Client.current().cluster
+
+    except ValueError:
+
         cluster = distributed.LocalCluster(
             n_workers=cores,
             threads_per_worker=1,
@@ -225,13 +232,18 @@ def local_client(
             silence_logs=logging.ERROR,  # , silence_logs=logging.ERROR #,resources={ 'GPU': 2}
         )
 
-    graphviper.dask.menrva.current_cluster.set(cluster)
+    #graphviper.dask.menrva.current_cluster.set(cluster)
 
-    if not graphviper.dask.menrva.current_client.get() is None:
-        return graphviper.dask.menrva.current_client.get()
+    #if not graphviper.dask.menrva.current_client.get() is None:
+    #    return graphviper.dask.menrva.current_client.get()
 
-    client = graphviper.dask.menrva.MenrvaClient(cluster)
-    client.get_versions(check=True)
+    try:
+        client = distributed.Client.current()
+
+    except ValueError:
+
+        client = graphviper.dask.menrva.MenrvaClient(cluster)
+        client.get_versions(check=True)
 
     # When constructing a graph that has local cache enabled all workers need to be up and running.
     if local_cache or wait_for_workers:
@@ -247,8 +259,7 @@ def local_client(
             log_params=worker_log_params,
         )
 
-    logger.info("Created client " + str(client))
-    graphviper.dask.menrva.current_client.set(client)
+    logger.info("Client " + str(client))
 
     return client
 
