@@ -27,16 +27,20 @@ from contextvars import ContextVar
 
 from typing import Union
 
-VERBOSE=True
-DEFAULT=False
+VERBOSE = True
+DEFAULT = False
 
 # global verbosity flag
-verbosity: Union[ContextVar[bool], ContextVar[None]] = ContextVar("message_verbosity", default=None)
+verbosity: Union[ContextVar[bool], ContextVar[None]] = ContextVar(
+    "message_verbosity", default=None
+)
 
-def set_verbosity(state: Union[None, bool]=None):
+
+def set_verbosity(state: Union[None, bool] = None):
     print(f"Setting verbosity to {state}")
 
     verbosity.set(state)
+
 
 def info(message: str, verbose: bool = False):
     logger_name = os.getenv("VIPER_LOGGER_NAME")
@@ -149,25 +153,25 @@ class ColorLoggingFormatter(logging.Formatter):
 
     FORMATS = {
         logging.DEBUG: start_msg
-                       + colorize.green(middle_msg)
-                       + colorize.grey("  %(name)10s: ")
-                       + " %(message)s",
+        + colorize.green(middle_msg)
+        + colorize.grey("  %(name)10s: ")
+        + " %(message)s",
         logging.INFO: start_msg
-                      + colorize.blue(middle_msg)
-                      + colorize.grey("  %(name)10s: ")
-                      + " %(message)s ",
+        + colorize.blue(middle_msg)
+        + colorize.grey("  %(name)10s: ")
+        + " %(message)s ",
         logging.WARNING: start_msg
-                         + colorize.orange(middle_msg)
-                         + colorize.grey("  %(name)10s: ")
-                         + " %(message)s ",
+        + colorize.orange(middle_msg)
+        + colorize.grey("  %(name)10s: ")
+        + " %(message)s ",
         logging.ERROR: start_msg
-                       + colorize.red(middle_msg)
-                       + colorize.grey("  %(name)10s: ")
-                       + " %(message)s",
+        + colorize.red(middle_msg)
+        + colorize.grey("  %(name)10s: ")
+        + " %(message)s",
         logging.CRITICAL: start_msg
-                          + colorize.format(text=middle_msg, color=[220, 60, 20], highlight=True)
-                          + colorize.grey("  %(name)10s: ")
-                          + " %(message)s",
+        + colorize.format(text=middle_msg, color=[220, 60, 20], highlight=True)
+        + colorize.grey("  %(name)10s: ")
+        + " %(message)s",
     }
 
     def format(self, record):
@@ -241,11 +245,11 @@ def get_logger(logger_name: Union[str, None] = None):
 
 
 def setup_logger(
-        logger_name: Union[str, None] = None,
-        log_to_term: bool = False,
-        log_to_file: bool = True,
-        log_file: str = "logger",
-        log_level: str = "INFO",
+    logger_name: Union[str, None] = None,
+    log_to_term: bool = False,
+    log_to_file: bool = True,
+    log_file: str = "logger",
+    log_level: str = "INFO",
 ):
     """To set up as many loggers as you want"""
     if logger_name is None:
@@ -278,12 +282,12 @@ def get_worker_logger_name(logger_name: Union[str, None] = None):
 
 
 def setup_worker_logger(
-        logger_name: str,
-        log_to_term: bool,
-        log_to_file: bool,
-        log_file: str,
-        log_level: str,
-        worker: dask.distributed.worker.Worker,
+    logger_name: str,
+    log_to_term: bool,
+    log_to_file: bool,
+    log_file: str,
+    log_level: str,
+    worker: dask.distributed.worker.Worker,
 ):
     parallel_logger_name = "_".join((logger_name, str(worker.name)))
 
@@ -300,14 +304,14 @@ def setup_worker_logger(
         dask.distributed.print(f"log_to_file: {log_to_file}")
 
         log_file = (
-                log_file
-                + "_"
-                + str(worker.name)
-                + "_"
-                + datetime.today().strftime("%Y%m%d_%H%M%S")
-                + "_"
-                + str(worker.ip)
-                + ".log"
+            log_file
+            + "_"
+            + str(worker.name)
+            + "_"
+            + datetime.today().strftime("%Y%m%d_%H%M%S")
+            + "_"
+            + str(worker.ip)
+            + ".log"
         )
         log_handler = logging.FileHandler(log_file)
         log_handler.setFormatter(LoggingFormatter())

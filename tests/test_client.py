@@ -24,7 +24,6 @@ class TestGraphViperClient:
             memory_limit="8GB",
             dask_local_dir=str(path),
             log_params=log_params,
-
         )
 
     @classmethod
