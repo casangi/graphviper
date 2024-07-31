@@ -1,7 +1,7 @@
 import os
 import re
 import pathlib
-import graphviper
+import distributed
 
 from graphviper.dask.client import local_client
 
@@ -11,26 +11,14 @@ class TestGraphViperClient:
     def setup_class(cls):
         """setup any state specific to the execution of the given test class
         such as fetching test data"""
-        log_params = {
-            "log_level": "DEBUG",
-            "log_to_file": True,
-            "log_file": "graphviper_log_file",
-        }
-
-        path = pathlib.Path(".").cwd() / "dask_test_dir"
-
-        cls.client = local_client(
-            cores=2,
-            memory_limit="8GB",
-            dask_local_dir=str(path),
-            log_params=log_params,
-        )
+        pass
 
     @classmethod
     def teardown_class(cls):
         """teardown any state that was previously setup with a call to setup_class
         such as deleting test data"""
-        cls.client.shutdown()
+        #cls.client.shutdown()
+        pass
 
     def setup_method(self):
         """setup any state specific to all methods of the given class"""
@@ -46,12 +34,29 @@ class TestGraphViperClient:
         astrohack Dask client.
         """
 
+        log_params = {
+            "log_level": "DEBUG",
+            "log_to_file": True,
+            "log_file": "graphviper_log_file",
+        }
+
+        path = pathlib.Path(".").cwd() / "dask_test_dir"
+
+        client = local_client(
+            cores=2,
+            memory_limit="8GB",
+            dask_local_dir=str(path),
+            log_params=log_params,
+        )
+
         try:
-            if graphviper.dask.menrva.current_client.get() is None:
+            if distributed.Client.current() is None:
                 raise OSError
 
         except OSError:
             assert False
+
+        client.shutdown()
 
     def test_client_dask_dir(self):
         """

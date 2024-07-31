@@ -216,9 +216,6 @@ def local_client(
             (str(round((psutil.virtual_memory().available / (1024**2)) / cores)), "MB")
         )
 
-    #if not graphviper.dask.menrva.current_cluster.get() is None:
-    #    cluster = graphviper.dask.menrva.current_cluster.get()
-
     try:
         cluster = distributed.Client.current().cluster
 
@@ -231,11 +228,6 @@ def local_client(
             memory_limit=memory_limit,
             silence_logs=logging.ERROR,  # , silence_logs=logging.ERROR #,resources={ 'GPU': 2}
         )
-
-    #graphviper.dask.menrva.current_cluster.set(cluster)
-
-    #if not graphviper.dask.menrva.current_client.get() is None:
-    #    return graphviper.dask.menrva.current_client.get()
 
     try:
         client = distributed.Client.current()
