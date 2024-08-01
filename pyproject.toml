@@ -1,14 +1,14 @@
 [project]
 name = "graphviper"
-version = "0.0.7"
-description = "Astro Visibility and Image Parallel Execution Reduction "
+version = "0.0.25"
+description = "Visibility and Image Parallel Execution Reduction for Radio Astronomy"
 authors = [
     {name = "Jan-Willem Steeb", email="jsteeb@nrao.edu"},
     {name = "Joshua Hoskins", email="jhoskins@nrao.edu"},
 ]
 license = {file = "LICENSE.txt"}
 readme = "README.md"
-requires-python = ">= 3.8, < 3.12"
+requires-python = ">= 3.9, < 3.12"
 
 dependencies = [
     'astropy',
@@ -18,11 +18,14 @@ dependencies = [
     'distributed',
     'matplotlib',
     'numba>=0.57.0',
-    'numpy<=1.25.0',
+    'numpy<2.0.0',
+    'psutil',
+    'ipywidgets',
     'prettytable',
     'pytest',
     'pytest-cov',
     'pytest-html',
+    'rich',
     'scipy',
     'tqdm',
     'xarray',
@@ -31,7 +34,8 @@ dependencies = [
     'jupyterlab',
     'pyarrow',
     'graphviz',
-    'xradio',
+    'xradio==0.0.34',
+    'rich',
     'python_casacore>=3.5.2; sys_platform != "darwin" '
 ]
 

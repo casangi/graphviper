@@ -4,25 +4,24 @@ def test_map_reduce():
     from graphviper.graph_tools.coordinate_utils import (
         interpolate_data_coords_onto_parallel_coords,
     )
+    from graphviper.graph_tools.generate_dask_workflow import generate_dask_workflow
     import dask
 
     from graphviper.dask.client import local_client
 
     viper_client = local_client(cores=2, memory_limit="3GB", autorestrictor=True)
 
-    ps_name = "Antennae_North.cal.lsrk.split.vis.zarr"
-    download(file=ps_name)
+    ps_store = "Antennae_North.cal.lsrk.split.vis.zarr"
+    download(file=ps_store, threaded=False)
 
     from xradio.vis.read_processing_set import read_processing_set
 
     ps = read_processing_set(
-        ps_name=ps_name,
-        intents=["OBSERVE_TARGET#ON_SOURCE"],
-        fields=None,
+        ps_store=ps_store,
+        obs_modes=["OBSERVE_TARGET#ON_SOURCE"],
     )
-    ms_xds = ps[
-        "Antennae_North.cal.lsrk.split_ddi_0_intent_OBSERVE_TARGET#ON_SOURCE_field_id_0"
-    ]
+
+    ms_xds = ps["Antennae_North.cal.lsrk.split_0"]
 
     from graphviper.graph_tools.coordinate_utils import make_parallel_coord
 
@@ -42,7 +41,7 @@ def test_map_reduce():
 
         # print(input_params.keys())
         ps = load_processing_set(
-            ps_name=input_params["input_data_store"],
+            ps_store=input_params["input_data_store"],
             sel_parms=input_params["data_selection"],
         )
         test_sum = 0
@@ -57,10 +56,8 @@ def test_map_reduce():
             )
         return test_sum  # input_params["test_input"]
 
-    input_params = {}
-    input_params["test_input"] = 42
-    input_params["input_data_store"] = ps_name
-    # print(input_params)
+    input_params = {"test_input": 42, "input_data_store": ps_store}
+
     node_task_data_mapping = interpolate_data_coords_onto_parallel_coords(
         parallel_coords, ps
     )
@@ -80,18 +77,73 @@ def test_map_reduce():
     def my_sum(graph_inputs, input_params):
         return np.sum(graph_inputs) + input_params["test_input"]
 
-    input_params = {}
-    input_params["test_input"] = 5
+    input_params = {"test_input": 5}
+
     graph_reduce = reduce(
         graph, my_sum, input_params, mode="tree"
     )  # mode "tree","single_node"
 
-    assert dask.compute(graph_reduce)[0][0][0] == 44544495255.635056
-    viper_client.close()
+    dask_graph = generate_dask_workflow(graph_reduce)
+
+    assert dask.compute(dask_graph)[0] == 44544495255.635056
 
 
-test_map_reduce()
+def test_ps_partition():
+    import pathlib
 
+    msv2name = "VLBA_TL016B_split.ms"
+    zarrPath = str(pathlib.Path(msv2name).with_suffix(".zarr"))
+
+    from graphviper.utils.data import download
+
+    download(file=msv2name)
+
+    from xradio.vis.convert_msv2_to_processing_set import convert_msv2_to_processing_set
+
+    convert_msv2_to_processing_set(
+        in_file=msv2name, out_file=zarrPath, partition_scheme=[], overwrite=True
+    )
+
+    from xradio.vis.read_processing_set import read_processing_set
+
+    ps = read_processing_set(zarrPath)
+
+    # print(ps.summary())
+
+    from graphviper.graph_tools.coordinate_utils import (
+        interpolate_data_coords_onto_parallel_coords,
+        make_parallel_coord,
+    )
+
+    # Let's try an empty parallel coord map first
+    parallel_coords = {}
+    node_task_data_mapping = interpolate_data_coords_onto_parallel_coords(
+        parallel_coords, ps, ps_partition=["spectral_window_name"]
+    )
+
+    # print(node_task_data_mapping)
+    assert len(node_task_data_mapping.keys()) == 2
+    # We check that for each data selection the spw_id is unique:
+    spw_split_success = all(
+        [
+            len(
+                set(
+                    [
+                        ps[k].attrs["partition_info"]["spectral_window_name"]
+                        for k in dm["data_selection"].keys()
+                    ]
+                )
+            )
+            == 1
+            for dm in node_task_data_mapping.values()
+        ]
+    )
+    assert spw_split_success
+
+
+if __name__ == "__main__":
+    test_map_reduce()
+    test_ps_partition()
 
 """
 chunk_indx 0 (0, 0)

@@ -7,8 +7,9 @@ import numpy as np
 import graphviper.utils.logger as logger
 
 from typing import Dict, Union
-from typing import Callable, Any, Tuple, List
+from typing import Callable, Any, Tuple, Dict
 from xradio.vis._processing_set import processing_set
+import copy
 
 
 def map(
@@ -19,7 +20,7 @@ def map(
     in_memory_compute: bool = False,
     client=None,
     date_time: str = None,
-) -> list:
+) -> Dict:
     """Create a perfectly parallel graph where a node is generated for each item in the :ref:`node_task_data_mapping <node task data mapping>` using the function specified in the ``node_task`` parameter.
 
     Parameters
@@ -87,10 +88,10 @@ def map(
         nodes_ip_list,
     ) = _local_cache_configuration(n_tasks, client, date_time)
 
-    graph_list = []
+    input_param_list = []
     # Create a node in Dask graph for each task_id in node_task_data_mapping
     for task_id, node_task_parameters in node_task_data_mapping.items():
-        logger.debug(task_id, node_task_parameters.keys())
+        # logger.debug('Task id: ' + str(task_id) + ", " + str(node_task_parameters.keys()))
 
         input_params.update(node_task_parameters)
         input_params["task_id"] = task_id
@@ -107,13 +108,15 @@ def map(
             input_params["viper_local_dir"] = viper_local_dir
             node_ip = nodes_ip_list[tasks_to_node_map[task_id]]
             input_params["node_ip"] = node_ip
-            with dask.annotate(resources={node_ip: 1}):
-                graph_list.append(dask.delayed(node_task)(dask.delayed(input_params)))
+            # with dask.annotate(resources={node_ip: 1}):
+            #    graph_list.append(dask.delayed(node_task)(dask.delayed(input_params)))
         else:
             input_params["date_time"] = None
-            graph_list.append(dask.delayed(node_task)(dask.delayed(input_params)))
+        input_param_list.append(copy.deepcopy(input_params))
 
-    return graph_list, input_params["date_time"]
+    graph = {"map": {"node_task": node_task, "input_params": input_param_list}}
+
+    return graph
 
 
 def _select_data(input_data, data_selection):

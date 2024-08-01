@@ -83,6 +83,8 @@ available_specs = {
 }
 print_libraries_availability(available_specs)
 
+colorize = console.Colorize()
+
 
 @parameter.validate()
 def local_client(
@@ -94,7 +96,7 @@ def local_client(
     wait_for_workers: bool = True,
     log_params: Union[None, Dict] = None,
     worker_log_params: Union[None, Dict] = None,
-    serial_execution: bool = False
+    serial_execution: bool = False,
 ) -> Union[distributed.Client, None]:
     """ Setup dask cluster and logger.
 
@@ -114,6 +116,7 @@ def local_client(
         `./dask-worker-space`, defaults to None
     local_dir : str
         Defines client local directory, defaults to None
+
     wait_for_workers : bool
         Boolean determining usage of wait_for_workers option in dask, defaults to False
     log_params : dict
@@ -154,23 +157,23 @@ def local_client(
         Dask Distributed Client
     """
 
-    colorize = console.Colorize()
-
     if log_params is None:
         log_params = {}
-    
-    log_params = {**{
+
+    log_params = {
+        **{
             "logger_name": "client",
             "log_to_term": True,
             "log_level": "INFO",
             "log_to_file": False,
             "log_file": "client.log",
-        }, **log_params
+        },
+        **log_params,
     }
 
     if worker_log_params is None:
         worker_log_params = {}
-    
+
     worker_log_params = {
         **{
             "logger_name": "worker",
@@ -178,12 +181,13 @@ def local_client(
             "log_level": "INFO",
             "log_to_file": False,
             "log_file": "client_worker.log",
-        }, **worker_log_params
+        },
+        **worker_log_params,
     }
 
     # If the user wants to change the global logger name from the
     # default value of graphviper
-    os.environ["VIPER_LOGGER_NAME"]=log_params["logger_name"]
+    os.environ["VIPER_LOGGER_NAME"] = log_params["logger_name"]
 
     if local_dir:
         os.environ["CLIENT_LOCAL_DIR"] = local_dir
@@ -243,17 +247,26 @@ def local_client(
         cores = multiprocessing.cpu_count()
 
     if memory_limit is None:
-        memory_limit = (
-            "".join((str(round((psutil.virtual_memory().available / (1024**2)) / cores)), "MB"))
+        memory_limit = "".join(
+            (str(round((psutil.virtual_memory().available / (1024**2)) / cores)), "MB")
         )
 
-    cluster = distributed.LocalCluster(
-        n_workers=cores,
-        threads_per_worker=1,
-        processes=True,
-        memory_limit=memory_limit,
-        silence_logs=logging.ERROR,  # , silence_logs=logging.ERROR #,resources={ 'GPU': 2}
-    )
+    if not graphviper.dask.menrva.current_cluster.get() is None:
+        cluster = graphviper.dask.menrva.current_cluster.get()
+
+    else:
+        cluster = distributed.LocalCluster(
+            n_workers=cores,
+            threads_per_worker=1,
+            processes=True,
+            memory_limit=memory_limit,
+            silence_logs=logging.ERROR,  # , silence_logs=logging.ERROR #,resources={ 'GPU': 2}
+        )
+
+    graphviper.dask.menrva.current_cluster.set(cluster)
+
+    if not graphviper.dask.menrva.current_client.get() is None:
+        return graphviper.dask.menrva.current_client.get()
 
     client = graphviper.dask.menrva.MenrvaClient(cluster)
     client.get_versions(check=True)
@@ -273,7 +286,109 @@ def local_client(
         )
 
     logger.info("Created client " + str(client))
+    graphviper.dask.menrva.current_client.set(client)
 
+    return client
+
+
+def distributed_client(
+    cluster: None,
+    dask_local_dir: str = None,
+    log_params: Union[None, Dict] = None,
+    worker_log_params: Union[None, Dict] = None,
+) -> Union[distributed.Client, None]:
+    """ Setup dask cluster and logger.
+
+    Parameters
+    ----------
+    cluster
+    log_params : dict
+        The logger for the main process (code that does not run in parallel), defaults to {}
+    worker_log_params : dict
+        worker_log_params: Keys as same as log_params, default values given in `Additional \
+        Information`_.
+
+    .. _Description:
+
+    ** _log_params **
+
+    The log_params (worker_log_params) dictionary stores initialization information for the logger and associated
+    workers. the following are the acceptable key: value pairs and their usage information.
+
+    log_params["logger_name"] : str
+        Defines the logger name to use
+    log_params["log_to_term"] : bool
+        Should messages log to the terminal output.
+    log_params["log_level"] : str
+        Defines logging level, valid options:
+            - DEBUG
+            - INFO
+            - WARNING
+            - ERROR
+            - CRITICAL
+
+        Only messages flagged as at the given level or below are logged.
+
+    log_params["log_to_file"] : str
+        Should messages log to file.
+
+    log_params["log_filee"] : str
+        Name of log file to create. If none is given, the file name 'logger' will be used.
+
+    Returns
+    -------
+        Dask Distributed Client
+    """
+
+    if log_params is None:
+        log_params = {}
+
+    log_params = {
+        **{
+            "logger_name": "client",
+            "log_to_term": True,
+            "log_level": "INFO",
+            "log_to_file": False,
+            "log_file": "client.log",
+        },
+        **log_params,
+    }
+
+    if worker_log_params is None:
+        worker_log_params = {}
+
+    worker_log_params = {
+        **{
+            "logger_name": "worker",
+            "log_to_term": True,
+            "log_level": "INFO",
+            "log_to_file": False,
+            "log_file": "client_worker.log",
+        },
+        **worker_log_params,
+    }
+
+    # If the user wants to change the global logger name from the
+    # default value of graphviper
+    os.environ["VIPER_LOGGER_NAME"] = log_params["logger_name"]
+
+    logger.setup_logger(**log_params)
+
+    if dask_local_dir is None:
+        logger.warning(
+            f"It is recommended that the local cache directory be set using "
+            f"the {colorize.blue('dask_local_dir')} parameter."
+        )
+
+    _set_up_dask(dask_local_dir)
+
+    # This will work as long as the scheduler path isn't in some outside directory. Being that it is a plugin specific
+    # to this module, I think keeping it static in the module directory it good.
+    plugin_path = str(pathlib.Path(__file__).parent.resolve().joinpath("plugins/"))
+
+    client = graphviper.dask.menrva.MenrvaClient(cluster)
+    client.get_versions(check=True)
+    logger.info("Created client " + str(client))
     return client
 
 
@@ -287,8 +402,8 @@ def slurm_cluster_client(
     python_env_dir: str,
     dask_local_dir: str,
     dask_log_dir: str,
-    exclude_nodes: str,
-    dashboard_port: int,
+    exclude_nodes: str = "",
+    dashboard_port: int = 8787,
     local_dir: str = None,
     autorestrictor: bool = False,
     wait_for_workers: bool = True,
@@ -412,11 +527,7 @@ def slurm_cluster_client(
 
     if local_cache or autorestrictor:
         dask.config.set(
-            {
-                "distributed.scheduler.preload": os.path.join(
-                    plugin_path, "scheduler.py"
-                )
-            }
+            {"distributed.scheduler.preload": os.path.join(plugin_path, "scheduler.py")}
         )
         dask.config.set(
             {

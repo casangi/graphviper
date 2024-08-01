@@ -23,11 +23,30 @@ from graphviper.utils.console import add_verbose_info
 
 from dask.distributed import get_worker
 
+from contextvars import ContextVar
+
 from typing import Union
+
+VERBOSE = True
+DEFAULT = False
+
+# global verbosity flag
+verbosity: Union[ContextVar[bool], ContextVar[None]] = ContextVar(
+    "message_verbosity", default=None
+)
+
+
+def set_verbosity(state: Union[None, bool] = None):
+    print(f"Setting verbosity to {state}")
+
+    verbosity.set(state)
 
 
 def info(message: str, verbose: bool = False):
     logger_name = os.getenv("VIPER_LOGGER_NAME")
+
+    if verbosity.get() is True or False:
+        verbose = verbosity.get()
 
     if verbose:
         message = add_verbose_info(message=message, color="blue")
@@ -36,8 +55,39 @@ def info(message: str, verbose: bool = False):
     logger.info(message)
 
 
+def log(message: str, verbose: bool = False):
+    logger_name = os.getenv("VIPER_LOGGER_NAME")
+
+    if verbosity.get() is True or False:
+        verbose = verbosity.get()
+
+    if verbose:
+        message = add_verbose_info(message=message, color="blue")
+
+    logger = get_logger(logger_name=logger_name)
+
+    logger.log(logger.level, message)
+
+
+def exception(message: str, verbose: bool = False):
+    logger_name = os.getenv("VIPER_LOGGER_NAME")
+
+    if verbosity.get() is True or False:
+        verbose = verbosity.get()
+
+    if verbose:
+        message = add_verbose_info(message=message, color="blue")
+
+    logger = get_logger(logger_name=logger_name)
+
+    logger.exception(message)
+
+
 def debug(message: str, verbose: bool = False):
     logger_name = os.getenv("VIPER_LOGGER_NAME")
+
+    if verbosity.get() is True or False:
+        verbose = verbosity.get()
 
     if verbose:
         message = add_verbose_info(message=message, color="green")
@@ -49,6 +99,9 @@ def debug(message: str, verbose: bool = False):
 def warning(message: str, verbose: bool = False):
     logger_name = os.getenv("VIPER_LOGGER_NAME")
 
+    if verbosity.get() is True or False:
+        verbose = verbosity.get()
+
     if verbose:
         message = add_verbose_info(message=message, color="orange")
 
@@ -59,6 +112,9 @@ def warning(message: str, verbose: bool = False):
 def error(message: str, verbose: bool = True):
     logger_name = os.getenv("VIPER_LOGGER_NAME")
 
+    if verbosity.get() is True or False:
+        verbose = verbosity.get()
+
     if verbose:
         message = add_verbose_info(message=message, color="red")
 
@@ -68,6 +124,9 @@ def error(message: str, verbose: bool = True):
 
 def critical(message: str, verbose: bool = True):
     logger_name = os.getenv("VIPER_LOGGER_NAME")
+
+    if verbosity.get() is True or False:
+        verbose = verbosity.get()
 
     if verbose:
         message = add_verbose_info(message=message, color="alert")
@@ -149,7 +208,11 @@ class LoggingFormatter(logging.Formatter):
 
 def get_logger(logger_name: Union[str, None] = None):
     if logger_name is None:
-        logger_name = "graphviper"
+        if os.getenv("VIPER_LOGGER_NAME"):
+            # Return default logger from env if none is specified.
+            logger_name = os.getenv("VIPER_LOGGER_NAME")
+        else:
+            logger_name = "graphviper"
 
     try:
         worker = get_worker()
@@ -237,12 +300,17 @@ def setup_worker_logger(
         logger.addHandler(stream_handler)
 
     if log_to_file:
+        logger.info(f"log_to_file: {log_file}")
+        dask.distributed.print(f"log_to_file: {log_to_file}")
+
         log_file = (
             log_file
             + "_"
             + str(worker.name)
             + "_"
             + datetime.today().strftime("%Y%m%d_%H%M%S")
+            + "_"
+            + str(worker.ip)
             + ".log"
         )
         log_handler = logging.FileHandler(log_file)
