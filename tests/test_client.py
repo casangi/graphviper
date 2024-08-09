@@ -1,7 +1,7 @@
 import os
 import re
 import pathlib
-import graphviper
+import distributed
 
 from graphviper.dask.client import local_client
 
@@ -11,26 +11,14 @@ class TestGraphViperClient:
     def setup_class(cls):
         """setup any state specific to the execution of the given test class
         such as fetching test data"""
-        log_params = {
-            "log_level": "DEBUG",
-            "log_to_file": True,
-            "log_file": "graphviper_log_file",
-        }
-
-        path = pathlib.Path(".").cwd() / "dask_test_dir"
-
-        cls.client = local_client(
-            cores=2,
-            memory_limit="8GB",
-            dask_local_dir=str(path),
-            log_params=log_params,
-        )
+        pass
 
     @classmethod
     def teardown_class(cls):
         """teardown any state that was previously setup with a call to setup_class
         such as deleting test data"""
-        cls.client.shutdown()
+        #cls.client.shutdown()
+        pass
 
     def setup_method(self):
         """setup any state specific to all methods of the given class"""
@@ -46,12 +34,92 @@ class TestGraphViperClient:
         astrohack Dask client.
         """
 
+        log_params = {
+            "log_level": "DEBUG",
+            "log_to_file": True,
+            "log_file": "graphviper_log_file",
+        }
+
+        path = pathlib.Path(".").cwd() / "dask_test_dir"
+
+        client = local_client(
+            cores=2,
+            memory_limit="8GB",
+            dask_local_dir=str(path),
+            log_params=log_params,
+        )
+
         try:
-            if graphviper.dask.menrva.current_client.get() is None:
+            if distributed.Client.current() is None:
                 raise OSError
 
         except OSError:
             assert False
+
+        client.shutdown()
+
+    def test_client_get(self):
+        """
+        Test the get_client() function.
+        """
+        from graphviper.dask.client import get_client
+
+        client = local_client(
+            cores=2,
+            memory_limit="4GB",
+        )
+
+        assert get_client() == distributed.Client.current()
+
+        client.shutdown()
+
+    def test_cluster_get(self):
+        """
+        Test the get_client() function.
+        """
+        from graphviper.dask.client import get_cluster
+
+        client = local_client(
+            cores=2,
+            memory_limit="4GB",
+        )
+
+        assert get_cluster() == distributed.Client.current().cluster
+
+        client.shutdown()
+
+    def test_client_thread_info(self):
+        """
+        Test that thread_info() function returns the values that were set in the client instantiation.
+        """
+
+        client = local_client(
+            cores=2,
+            memory_limit="4GB",
+        )
+
+        memory_per_thread = -1
+        n_threads = 0
+
+        # Not sure if this test is deterministic. The tests are done using github actions and, I am sure the container
+        # environment will change over time. Hopefully, the test pulls out the most consistently calculated case.
+
+        worker_items = client.cluster.scheduler_info['workers'].items()
+
+        for worker_name, worker in worker_items:
+            temp_memory_per_thread = (worker['memory_limit'] / worker['nthreads']) / (1024 ** 3)
+            n_threads = n_threads + worker['nthreads']
+
+            if (memory_per_thread == -1) or (memory_per_thread > temp_memory_per_thread):
+                memory_per_thread = temp_memory_per_thread
+
+        assert client.thread_info() == {
+            "n_threads": 2,
+            "memory_per_thread": memory_per_thread
+        }
+
+        client.shutdown()
+
 
     def test_client_dask_dir(self):
         """

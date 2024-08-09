@@ -1,36 +1,25 @@
 import sys
 
+import psutil
 import distributed
 import inspect
 import importlib
 import importlib.util
 import pathlib
-import warnings
 
 import graphviper.utils.logger as logger
 import graphviper.utils.console as console
 
+from importlib.metadata import PackageNotFoundError, version
+
+from packaging.version import parse as parse_version
 from distributed.diagnostics.plugin import WorkerPlugin
-from distributed.utils import sync
-from distributed.utils import NoOpAwaitable
-from distributed.utils import wait_for
 
-from dask.typing import NoDefault, no_default
-
-from contextvars import ContextVar
-from contextlib import suppress
+from dask.widgets import get_template
 
 from typing import Callable, Tuple, Dict, Any, Union
 
 colorize = console.Colorize()
-
-current_client: Union[ContextVar[distributed.Client], ContextVar[None]] = ContextVar(
-    "current_client", default=None
-)
-current_cluster: Union[ContextVar[distributed.LocalCluster], ContextVar[None]] = (
-    ContextVar("current_cluster", default=None)
-)
-
 
 class MenrvaClient(distributed.Client):
     """
@@ -38,99 +27,76 @@ class MenrvaClient(distributed.Client):
     plugin management and more extended features.
     """
 
-    _is_finalizing: Union[list, bool] = staticmethod(sys.is_finalizing)
+    def _repr_html_(self):
+        try:
+            distributed.Client.current()
 
-    def __new__(cls, *args, **kwargs):
-        if not hasattr(cls, "_instance"):
-            cls._instance = super(MenrvaClient, cls).__new__(cls)
-            current_client.set(cls._instance)
-
-        return cls._instance
-
-    def __enter__(self):
-        if not self._loop_runner.is_started():
-            self.start()
-        if self._set_as_default:
-            self._previous_as_current = current_client.set(self)
-
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        if self._previous_as_current:
-            try:
-                current_client.reset(self._previous_as_current)
-            except ValueError as e:
-                if not e.args[0].endswith(" was created in a different Context"):
-                    raise  # pragma: nocover
-                warnings.warn(
-                    "It is deprecated to enter and exit the Client context "
-                    "manager from different threads",
-                    DeprecationWarning,
-                    stacklevel=2,
-                )
-        # Close both local cluster AND client. Can change this to self.close() if that isn't the desired behaviour.
-        self.shutdown()
-
-    def shutdown(self):
-        """Shut down the connected scheduler and workers
-
-        Note, this may disrupt other clients that may be using the same
-        scheduler and workers.
-
-        See Also
-        --------
-        Client.close : close only this client
-        """
-        current_client.set(None)
-        current_cluster.set(None)
-
-        return self.sync(self._shutdown)
-
-    def close(self, timeout=no_default):
-        """Close this client
-
-        Clients will also close automatically when your Python session ends
-
-        If you started a client without arguments like ``Client()`` then this
-        will also close the local cluster that was started at the same time.
+        except ValueError:
+            logger.debug("<No Dask Client>")
+            return None
 
 
-        Parameters
-        ----------
-        timeout : number
-            Time in seconds after which to raise a
-            ``dask.distributed.TimeoutError``
+        try:
+            dle_version = parse_version(version("dask-labextension"))
+            JUPYTERLAB = False if dle_version < parse_version("6.0.0") else True
 
-        See Also
-        --------
-        Client.restart
-        """
-        current_client.set(None)
+        except PackageNotFoundError:
+            JUPYTERLAB = False
 
-        if timeout is no_default:
-            timeout = self._timeout * 2
-        # XXX handling of self.status here is not thread-safe
-        if self.status in ["closed", "newly-created"]:
-            if self.asynchronous:
-                return NoOpAwaitable()
-            return
-        self.status = "closing"
+        scheduler, info = self._get_scheduler_info()
 
-        with suppress(AttributeError):
-            for pc in self._periodic_callbacks.values():
-                pc.stop()
+        return get_template("client.html.j2").render(
+            id=self.id,
+            scheduler=scheduler,
+            info=info,
+            cluster=self.cluster,
+            scheduler_file=self.scheduler_file,
+            dashboard_link=self.dashboard_link,
+            jupyterlab=JUPYTERLAB,
+        )
 
-        if self.asynchronous:
-            coro = self._close()
-            if timeout:
-                coro = wait_for(coro, timeout)
-            return coro
+    @staticmethod
+    def thread_info()->Dict[str, Any]:
 
-        sync(self.loop, self._close, fast=True, callback_timeout=timeout)
-        assert self.status == "closed"
+        try:
+            client = distributed.Client.current()
 
-        if not self._is_finalizing():
-            self._loop_runner.stop()
+        except ValueError:  # Using default Dask schedular.
+            logger.warning("Couldn't find a current client instance, calculating thread information based on current system.")
+
+            cpu_cores = psutil.cpu_count()
+            total_memory = psutil.virtual_memory().total / (1024 ** 3)
+
+            thread_info = {
+                'n_threads': cpu_cores,
+                'memory_per_thread': total_memory / cpu_cores
+            }
+
+            return thread_info
+
+        memory_per_thread = -1
+        n_threads = 0
+
+        # client.cluster only exists for LocalCluster
+        if client.cluster is None:
+            worker_items = client.scheduler_info()['workers'].items()
+
+        else:
+            worker_items = client.cluster.scheduler_info['workers'].items()
+
+        for worker_name, worker in worker_items:
+            temp_memory_per_thread = (worker['memory_limit'] / worker['nthreads']) / (1024 ** 3)
+            n_threads = n_threads + worker['nthreads']
+
+            if (memory_per_thread == -1) or (memory_per_thread > temp_memory_per_thread):
+                memory_per_thread = temp_memory_per_thread
+
+        thread_info = {
+            'n_threads': n_threads,
+            'memory_per_thread': memory_per_thread
+        }
+
+        return thread_info
 
     @staticmethod
     def call(func: Callable, *args: Tuple[Any], **kwargs: Dict[str, Any]):

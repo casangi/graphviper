@@ -1,11 +1,11 @@
-import psutil
-import multiprocessing
-import dask
 import os
-import dask_jobqueue
+import dask
+import psutil
 import logging
 import pathlib
 import distributed
+import dask_jobqueue
+import multiprocessing
 import graphviper.dask.menrva
 
 import graphviper.utils.parameter as parameter
@@ -17,17 +17,59 @@ from typing import Union, Dict
 colorize = console.Colorize()
 
 
+def get_thread_info() -> Dict[str, float]:
+    # This just brings the built-in thread info function into the client module.
+    return graphviper.dask.menrva.MenrvaClient.thread_info()
+
+
+def get_client() -> Union[None, distributed.Client]:
+    """
+    Get a graphviper client instance
+    Returns: None or a graphviper client instance
+
+    """
+    try:
+        client = distributed.Client.current()
+
+    except ValueError:
+        client = None
+
+    if client is None:
+        logger.info("There are currently no client instances.")
+        return None
+
+    return client
+
+
+def get_cluster() -> Union[None, distributed.LocalCluster]:
+    """
+    Get a graphviper cluster instance
+    Returns: None or a graphviper cluster instance
+
+    """
+    cluster = None
+
+    if get_client() is not None:
+        cluster = distributed.Client.current().cluster
+
+    if cluster is None:
+        logger.info("There are currently no cluster instances.")
+        return None
+
+    return cluster
+
+
 @parameter.validate()
 def local_client(
-    cores: int = None,
-    memory_limit: str = None,
-    autorestrictor: bool = False,
-    dask_local_dir: str = None,
-    local_dir: str = None,
-    wait_for_workers: bool = True,
-    log_params: Union[None, Dict] = None,
-    worker_log_params: Union[None, Dict] = None,
-    serial_execution: bool = False,
+        cores: int = None,
+        memory_limit: str = None,
+        autorestrictor: bool = False,
+        dask_local_dir: str = None,
+        local_dir: str = None,
+        wait_for_workers: bool = True,
+        log_params: Union[None, Dict] = None,
+        worker_log_params: Union[None, Dict] = None,
+        serial_execution: bool = False,
 ) -> Union[distributed.Client, None]:
     """ Setup dask cluster and logger.
 
@@ -179,13 +221,14 @@ def local_client(
 
     if memory_limit is None:
         memory_limit = "".join(
-            (str(round((psutil.virtual_memory().available / (1024**2)) / cores)), "MB")
+            (str(round((psutil.virtual_memory().available / (1024 ** 2)) / cores)), "MB")
         )
 
-    if not graphviper.dask.menrva.current_cluster.get() is None:
-        cluster = graphviper.dask.menrva.current_cluster.get()
+    try:
+        cluster = distributed.Client.current().cluster
 
-    else:
+    except ValueError:
+
         cluster = distributed.LocalCluster(
             n_workers=cores,
             threads_per_worker=1,
@@ -194,13 +237,13 @@ def local_client(
             silence_logs=logging.ERROR,  # , silence_logs=logging.ERROR #,resources={ 'GPU': 2}
         )
 
-    graphviper.dask.menrva.current_cluster.set(cluster)
+    try:
+        client = distributed.Client.current()
 
-    if not graphviper.dask.menrva.current_client.get() is None:
-        return graphviper.dask.menrva.current_client.get()
+    except ValueError:
 
-    client = graphviper.dask.menrva.MenrvaClient(cluster)
-    client.get_versions(check=True)
+        client = graphviper.dask.menrva.MenrvaClient(cluster)
+        client.get_versions(check=True)
 
     # When constructing a graph that has local cache enabled all workers need to be up and running.
     if local_cache or wait_for_workers:
@@ -216,17 +259,16 @@ def local_client(
             log_params=worker_log_params,
         )
 
-    logger.info("Created client " + str(client))
-    graphviper.dask.menrva.current_client.set(client)
+    logger.info("Client " + str(client))
 
     return client
 
 
 def distributed_client(
-    cluster: None,
-    dask_local_dir: str = None,
-    log_params: Union[None, Dict] = None,
-    worker_log_params: Union[None, Dict] = None,
+        cluster: None,
+        dask_local_dir: str = None,
+        log_params: Union[None, Dict] = None,
+        worker_log_params: Union[None, Dict] = None,
 ) -> Union[distributed.Client, None]:
     """ Setup dask cluster and logger.
 
@@ -324,22 +366,22 @@ def distributed_client(
 
 
 def slurm_cluster_client(
-    workers_per_node: int,
-    cores_per_node: int,
-    memory_per_node: str,
-    number_of_nodes: int,
-    queue: str,
-    interface: str,
-    python_env_dir: str,
-    dask_local_dir: str,
-    dask_log_dir: str,
-    exclude_nodes: str = "",
-    dashboard_port: int = 8787,
-    local_dir: str = None,
-    autorestrictor: bool = False,
-    wait_for_workers: bool = True,
-    log_params: Union[None, Dict] = None,
-    worker_log_params: Union[None, Dict] = None,
+        workers_per_node: int,
+        cores_per_node: int,
+        memory_per_node: str,
+        number_of_nodes: int,
+        queue: str,
+        interface: str,
+        python_env_dir: str,
+        dask_local_dir: str,
+        dask_log_dir: str,
+        exclude_nodes: str = "",
+        dashboard_port: int = 8787,
+        local_dir: str = None,
+        autorestrictor: bool = False,
+        wait_for_workers: bool = True,
+        log_params: Union[None, Dict] = None,
+        worker_log_params: Union[None, Dict] = None,
 ):
     """Creates a Dask slurm_cluster_client on a multinode cluster.
 
