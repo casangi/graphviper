@@ -1,12 +1,15 @@
+from importlib.util import find_spec
+from importlib import import_module
 import logging
 import multiprocessing
 import os
 import pathlib
-from importlib.util import find_spec
-from importlib import import_module
-from typing import Dict, Union
+import re
+import socket
+from typing import Dict, List, Union
 
 import dask
+import dask.distributed
 import dask_jobqueue
 import distributed
 import psutil
@@ -18,16 +21,17 @@ import graphviper.utils.parameter as parameter
 
 colorize = console.Colorize()
 
+
 def load_library_if_available(
     name: str,
     libs: Union[str, list[str]]
 ) -> dict[str, bool]:
-    """Load libraries, if these are enabled.
+    """Load libraries if these are installed and can be loaded.
 
     Parameters
     ----------
     name : library group name
-        A group or a function name of the library will be imported.
+        A library group name based on a function of a distributed environment will be imported.
     libs : Union[str, list[str]]
         library names to import
 
@@ -82,8 +86,6 @@ available_specs = {
     **load_library_if_available("CUDA", "dask_cuda")
 }
 print_libraries_availability(available_specs)
-
-colorize = console.Colorize()
 
 
 @parameter.validate()
@@ -610,3 +612,135 @@ def _set_up_dask(local_directory):
     dask.config.set({"distributed.nanny.environ.OMP_NUM_THREADS": 1})
     dask.config.set({"distributed.nanny.environ.MKL_NUM_THREADS": 1})
     # https://docs.dask.org/en/stable/how-to/customize-initialization.html
+
+
+def ssh_cluster_client(
+    scheduler_host: str,
+    worker_hosts: list[str],
+    connect_options: dict,
+    remote_python: str,
+    scheduler_options: dict = {"scheduler_port": ":8786", "dashboard_address": ":8787"},
+    worker_options: dict = {"nthreads": 1, "n_workers": 2},
+    log_params: Union[None, Dict] = None
+):
+    """Creates a Dask ssh_cluster_client on a multinode cluster.
+    
+    Environments:
+    1. Prepare servers with shared storage to run SSHCluster scheduler and workers,
+       and create the common user that has the same uid/gid among them.
+    2. Create Python environment on the servers (it is usefull to make it on the shared storage) by conda-forge or the others,
+       and edit a initial script like .bash_profile of the common user to load the Python environment.
+    3. To connect by SSH easier, create auth key for the user and share it on the servers.
+       If you could not prepare auth key, you can use 'password' in connect_options of SSHCluster init params.
+       For another parameters of SSH connection, please see https://docs.dask.org/en/latest/deploying-ssh.html#dask.distributed.SSHCluster
+    4. Create input and output folders on the shared storage.
+    5. initialize SSHCluster as bellow:
+        client = ssh_cluster_client(scheduler_host='133.40.203.167',
+                                    worker_hosts=['133.40.203.167', '133.40.203.168', '133.40.203.169', '133.40.203.170'],
+                                    connect_options={'username':'vagrant', 'known_hosts': None},
+                                    remote_python='/path/to/.venv/bin/python3',
+                                    scheduler_options={"dashboard_address": ":8799"},
+                                    worker_options={"nthreads": 2, "n_workers": 2},
+                                    log_params=log_params)
+
+    Parameters
+    ----------
+    scheduler_host : str
+        IP address or host name that can be connected from local environment, as the scheduler of dask distributed.
+
+    worker_hosts : list
+        List of IP address or host name that can be connected from local environment, as the workers of Dask Distributed.
+        It can be set redundant values like ['host_A', 'host_A', 'host_B'], then it creates redundant SSH connections.
+
+    remote_python : str
+        Python executable used to launch scheduler and workers.
+
+    scheduler_options : dict
+        Dictionary of scheduler configuration. Defaults to {"scheduler_port": ":8786", "dashboard_address": ":8787"},
+
+    worker_options : dict
+        Dictionary of worker configuration. Defaults to {"nthreads": 1, "n_workers": 2}
+
+    log_params : dict
+        Dictionary containing parameters to using for logging.
+
+    .. _Description:
+
+    ** _log_params **
+
+    The log_params (worker_log_params) dictionary stores initialization information for the logger and associated
+    workers. the following are the acceptable key: value pairs and their usage information.
+
+    log_params["logger_name"] : str
+        Defines the logger name to use
+    log_params["log_to_term"] : bool
+        Should messages log to the terminal output.
+    log_params["log_level"] : str
+        Defines logging level, valid options:
+            - DEBUG
+            - INFO
+            - WARNING
+            - ERROR
+            - CRITICAL
+
+        Only messages flagged as at the given level or below are logged.
+
+    log_params["log_to_file"] : str
+        Should messages log to file.
+
+    log_params["log_filee"] : str
+        Name of log file to create. If none is given, the file name 'logger' will be used.
+
+    Returns
+    -------
+        distributed.Client
+    """
+    hosts = validate_addresses(scheduler_host)
+    worker_hosts = validate_addresses(worker_hosts)
+    if len(hosts) == 0:
+        raise ValueError("None valid scheduler")
+    if len(worker_hosts) == 0:
+        raise ValueError("None valid worker")
+    hosts.extend(worker_hosts)
+
+    cluster = dask.distributed.SSHCluster(
+        hosts=hosts,
+        connect_options=connect_options,
+        scheduler_options=scheduler_options,
+        worker_options=worker_options,
+        remote_python=remote_python
+    )
+
+    client = distributed_client(cluster, False, log_params)
+    return client
+
+
+def _is_valid_hostname(hostname):
+    if len(hostname) > 255:
+        return False
+    if hostname[-1] == ".":
+        hostname = hostname[:-1]
+    allowed = re.compile(r"(?!-)[A-Z\d-]{1,63}(?<!-)$", re.IGNORECASE)
+    return all(allowed.match(x) for x in hostname.split("."))
+
+def _is_valid_ip(ip):
+    try:
+        socket.inet_pton(socket.AF_INET, ip)
+        return True
+    except OSError:
+        try:
+            socket.inet_pton(socket.AF_INET6, ip)
+            return True
+        except OSError:
+            return False
+
+def validate_addresses(addresses: Union[str, List[str]]):
+    if isinstance(addresses, str):
+        addresses = [addresses]
+    results = []
+    for address in addresses:
+        if _is_valid_ip(address) or _is_valid_hostname(address):
+            results.append(address)
+        else:
+            logger.warning(colorize.yellow(f"Invalid hostname or IPaddr: {address}"))
+    return results
