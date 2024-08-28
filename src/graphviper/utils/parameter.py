@@ -173,20 +173,30 @@ def verify(
     else:
         logger = external_logger
 
-    graphviper.utils.logger.info(
+    graphviper.utils.logger.debug(
         "Checking parameter values for {module}.{function}".format(
             function=colorize.blue(function_name), module=colorize.blue(module_name)
         )
     )
 
     module_path = get_path(function)
-    logger.info(f"Module path: {colorize.blue(module_path)}")
+    logger.debug(f"Module path: {colorize.blue(module_path)}")
 
     path = None
 
     # First we need to find the parameter configuration files
     if config_dir is not None:
-        path = config_dir
+        tag, environment_path = config_dir.split(":")
+        if tag.lower() == "env":
+            if pathlib.Path(os.getenv(environment_path)).exists():
+                path = os.getenv(environment_path)
+                logger.debug(f"Configuration path set to: {path}")
+
+            else:
+                logger.error(f"Configuration path provided does not exist: ENV={environment_path}")
+
+        else:
+            path = config_dir
 
     # If the parameter configuration directory is not passed as an argument this environment variable should be set.
     # In this case, the environment variable is set in the __init__ file of the astrohack module.
