@@ -19,7 +19,7 @@ colorize = console.Colorize()
 def version():
     # Load the file dropbox file meta data.
     meta_data_path = pathlib.Path(__file__).parent.joinpath(
-        ".dropbox/file.download.json"
+        ".drive/file.download.json"
     )
 
     # Verify that the download metadata exist and update if not.
@@ -92,7 +92,7 @@ def list_files():
     table = Table(show_header=True, show_lines=True)
 
     meta_data_path = pathlib.Path(__file__).parent.joinpath(
-        ".dropbox/file.download.json"
+        ".drive/file.download.json"
     )
 
     # Verify that the download metadata exist and update if not.
@@ -134,16 +134,15 @@ def get_files():
 
 
 def update():
-    meta_data_path = pathlib.Path(__file__).parent.joinpath(".dropbox")
+    meta_data_path = pathlib.Path(__file__).parent.joinpath(".drive")
 
-    _makedir(str(pathlib.Path(__file__).parent), ".dropbox")
+    _makedir(str(pathlib.Path(__file__).parent), ".drive")
 
     file_meta_data = {
         "metadata": {
             "file.download.json": {
                 "file": "file.download.json",
-                "id": "1m53led1mchpdc4m3pv37",
-                "rlkey": "enkp8m1hv437nu6p020owflrt&st=11psoc6n",
+                "id": "",
             }
         }
     }
@@ -211,10 +210,9 @@ def _is_notebook() -> bool:
 def _get_from_dropbox(file: str, folder: str, file_meta_data: dict, bar=True) -> None:
     fullname = file_meta_data["metadata"][file]["file"]
     id = file_meta_data["metadata"][file]["id"]
-    rlkey = file_meta_data["metadata"][file]["rlkey"]
 
-    url = "https://www.dropbox.com/scl/fi/{id}/{file}?rlkey={rlkey}".format(
-        id=id, file=fullname, rlkey=rlkey
+    url = "https://www.dropbox.com/scl/fi/{id}/{file}".format(
+        id=id, file=fullname
     )
 
     r = requests.get(url, stream=True, headers={"user-agent": "Wget/1.16 (linux-gnu)"})
@@ -270,7 +268,7 @@ def _download(file: str, folder: str = ".") -> NoReturn:
 
     # Load the file dropbox file meta data.
     meta_data_path = pathlib.Path(__file__).parent.joinpath(
-        ".dropbox/file.download.json"
+        ".drive/file.download.json"
     )
 
     if meta_data_path.exists():

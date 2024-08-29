@@ -13,7 +13,7 @@ import graphviper.utils.console as console
 
 from graphviper.utils.protego import Protego
 
-from typing import Callable, Any, Union, NoReturn, Dict, List, Optional
+from typing import Callable, Any, Union, NoReturn, Dict, List, Optional, Tuple
 from types import ModuleType
 
 
@@ -32,10 +32,10 @@ def is_notebook() -> bool:
 
 
 def validate(
-    config_dir: str = None,
-    custom_checker: Callable = None,
-    add_data_type: Any = None,
-    external_logger: Callable = None,
+        config_dir: str = None,
+        custom_checker: Callable = None,
+        add_data_type: Any = None,
+        external_logger: Callable = None,
 ):
     def function_wrapper(function):
         @functools.wraps(function)
@@ -69,19 +69,44 @@ def validate(
     return function_wrapper
 
 
-def get_path(function: Callable) -> str:
+# DEPRECATED
+def _get_path(function: Callable) -> str:
     module = inspect.getmodule(function)
     module_path = inspect.getfile(module).rstrip(".py")
 
     if "src" in module_path:
         # This represents a local developer install
+
         base_module_path = module_path.split("src/")[0]
         return base_module_path
+
     else:
         # Here we hope that we can find the package in site-packages and it is unique
         # otherwise the user should provide the configuration path in the decorator.
+
         base_module_path = module_path.split("site-packages/")[0]
-        return "/".join((base_module_path, "site-packages/"))
+        return str(pathlib.Path(base_module_path).joinpath("site-packages/"))
+
+
+def get_path(function: Callable) -> tuple[str, str]:
+    module = inspect.getmodule(function)
+    module_path = inspect.getfile(module).rstrip(".py")
+
+    # Determine whether this is a developer install or a site install
+    tag = "src" if "src" in module_path else "site-packages"
+
+    # The base directory should be to the left of the tag
+    base_module_path = module_path.split(f"{tag}/")[0]
+
+    # Split the module path up and determine what the package name and location is.
+    split_path = module_path.split("/")
+    index = split_path.index(tag) + 1
+    package_name = split_path[index]
+
+    # Build the full package path
+    base_module_path = pathlib.Path(base_module_path).joinpath(f"{tag}/{package_name}")
+
+    return str(base_module_path), module_path
 
 
 def config_search(root: str = "/", module_name=None) -> Union[None, str]:
@@ -150,13 +175,13 @@ def verify_configuration(path: str, module: ModuleType) -> List[str]:
 
 
 def verify(
-    function: Callable,
-    args: Dict,
-    meta_data: Dict[str, Union[Optional[str], Any]],
-    config_dir: str = None,
-    add_data_type: Any = None,
-    custom_checker: Callable = None,
-    external_logger: Callable = None,
+        function: Callable,
+        args: Dict,
+        meta_data: Dict[str, Union[Optional[str], Any]],
+        config_dir: str = None,
+        add_data_type: Any = None,
+        custom_checker: Callable = None,
+        external_logger: Callable = None,
 ) -> NoReturn:
     colorize = console.Colorize()
     function_name, module_name = meta_data.values()
@@ -179,90 +204,40 @@ def verify(
         )
     )
 
-    module_path = get_path(function)
-    logger.debug(f"Module path: {colorize.blue(module_path)}")
-
     path = None
 
+    package_path, module_path = get_path(function)
+    logger.info(f"Module path: {colorize.blue(package_path)}")
+
     # First we need to find the parameter configuration files
+    if pathlib.Path(package_path).joinpath("config").joinpath(f"{module_name}.param.json").exists():
+        logger.debug(f"Found configuration for {module_name}.{function_name} in: {colorize.blue(package_path)}")
+        path = str(pathlib.Path(package_path).joinpath("config"))
+
+    # User specified configuration directory take precedent
     if config_dir is not None:
-        tag, environment_path = config_dir.split(":")
-        if tag.lower() == "env":
-            if pathlib.Path(os.getenv(environment_path)).exists():
-                path = os.getenv(environment_path)
-                logger.debug(f"Configuration path set to: {path}")
-
-            else:
-                logger.error(f"Configuration path provided does not exist: ENV={environment_path}")
-
-        else:
+        if pathlib.Path(config_dir).joinpath(f"{module_name}.param.json").exists():
+            logger.debug(f"Setting configuration directory to user provided [{config_dir}]")
             path = config_dir
 
-    # If the parameter configuration directory is not passed as an argument this environment variable should be set.
-    # In this case, the environment variable is set in the __init__ file of the astrohack module.
-    #
-    # This should be set according to the same pattern as PATH in terminal, ie. PATH=$PATH:/path/new
-    # the parsing code will expect this.
-    elif os.getenv("PARAMETER_CONFIG_PATH"):
-        for paths in os.getenv("PARAMETER_CONFIG_PATH").split(":"):
-            result = config_search(root=paths, module_name=module_name)
-            logger.debug("Result: {}".format(colorize.blue(result)))
-            if result:
-                path = result
-                logger.debug(
-                    "PARAMETER_CONFIG_PATH: {dir}".format(dir=colorize.blue(result))
-                )
-                break
+        else:
+            logger.warning("User provided configuration directory does not exist. Searching for parameter files ...")
 
-        # If we can't find the configuration in the ENV path we will make a last ditch effort to find it in either src/,
-        # if that exists or looking in the python site-packages/ directory before giving up.
+    # If we have been delt only failure at this point, then we try one last ditch effort. Search the package directory!
+    if not path:
+        logger.debug(f"Couldn't determine parameter configuration directory, doing a depth search of {package_path}")
+        path = config_search(root=package_path, module_name=module_name)
+
         if not path:
-            logger.info(
-                "Failed to find module in PARAMETER_CONFIG_PATH ... attempting to check common directories ..."
-            )
-            path = config_search(root=module_path, module_name=module_name)
-
-            if not path:
-                logger.error(
-                    "{function}: Cannot find parameter configuration directory.".format(
-                        function=function_name
-                    )
-                )
-                assert False
-
-    else:
-        path = config_search(root=module_path, module_name=module_name)
-        if not path:
-            logger.error(
-                "{function}: Cannot find parameter configuration directory.".format(
-                    function=function_name
-                )
-            )
-            assert False
+            logger.error(f"Cannot find parameter configuration directory for {function_name}")
+            raise FileNotFoundError
 
     # Define parameter file name
     parameter_file = module_name + ".param.json"
 
-    logger.debug(path + "/" + parameter_file)
+    logger.debug(f"Parameter configuration file: {pathlib.Path(path).joinpath(parameter_file)}")
 
-    # Load calling module to make this more general
-    module = importlib.import_module(function.__module__)
-
-    # This will check the configuration path and return the available modules
-    module_config_list = verify_configuration(path, module)
-
-    # Make sure that required module is present
-    if module_name not in module_config_list:
-        logger.error(
-            "Parameter file for {function} not found in {path}".format(
-                function=colorize.red(function_name),
-                path="/".join((path, parameter_file)),
-            )
-        )
-
-        raise FileNotFoundError
-
-    with open("/".join((path, parameter_file))) as json_file:
+    with open(pathlib.Path(path).joinpath(parameter_file)) as json_file:
         schema = json.load(json_file)
 
     if function_name not in schema.keys():
