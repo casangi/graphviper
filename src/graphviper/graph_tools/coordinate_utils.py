@@ -11,10 +11,10 @@ from scipy.interpolate import interp1d
 
 
 def make_time_coord(
-    time_start: str = "2019-10-03T19:00:00.000",
-    time_delta: numbers.Number = 3600,
-    n_samples: int = 10,
-    time_scale: {"tai", "tcb", "tcg", "tdb", "tt", "ut1", "utc", "local"} = "utc",
+        time_start: str = "2019-10-03T19:00:00.000",
+        time_delta: numbers.Number = 3600,
+        n_samples: int = 10,
+        time_scale: {"tai", "tcb", "tcg", "tdb", "tt", "ut1", "utc", "local"} = "utc",
 ) -> Dict:
     """Convenience function that creates a time coordinate `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ that can be used to create :ref:`parallel_coords <parallel coords>` using :func:`make_parallel_coord` function.
 
@@ -74,10 +74,10 @@ def make_time_coord(
 
 
 def make_frequency_coord(
-    freq_start: numbers.Number = 3 * 10**9,
-    freq_delta: numbers.Number = 0.4 * 10**9,
-    n_channels: int = 50,
-    velocity_frame: {"gcrs", "icrs", "hcrs", "lsrk", "lsrd", "lsr"} = "lsrk",
+        freq_start: numbers.Number = 3 * 10 ** 9,
+        freq_delta: numbers.Number = 0.4 * 10 ** 9,
+        n_channels: int = 50,
+        velocity_frame: {"gcrs", "icrs", "hcrs", "lsrk", "lsrd", "lsr"} = "lsrk",
 ) -> Dict:
     """Convenience function that creates a frequency coordinate `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ that can be used to create :ref:`parallel_coords <parallel coords>` using :func:`make_parallel_coord` function.
 
@@ -123,9 +123,9 @@ def make_frequency_coord(
 
 
 def make_parallel_coord(
-    coord: Union[Dict, xr.DataArray],
-    n_chunks: Union[None, int] = None,
-    gap: Union[None, float] = None,
+        coord: Union[Dict, xr.DataArray],
+        n_chunks: Union[None, int] = None,
+        gap: Union[None, float] = None,
 ) -> Dict:
     """Creates a single parallel coordinate from a `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ or a `xarray.DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_ with `measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_.
 
@@ -216,7 +216,7 @@ def make_parallel_coord(
 
 
 def make_parallel_coord_by_gap(coord: Union[Dict, xr.DataArray],
-                               gap: float)-> Dict: 
+                               gap: float) -> Dict:
     """Creates a single parallel coordinate from from a `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ or a `xarray.DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_ with `measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_.
 
     This function only returns a single :ref:`parallel_coord <parallel coord>`; to create :ref:`parallel_coords <parallel coords>` a dictionary must be created where the keys are the dimension coordinate names and the values are the respective :ref:`parallel_coord <parallel coord>`.
@@ -232,19 +232,19 @@ def make_parallel_coord_by_gap(coord: Union[Dict, xr.DataArray],
         coord = coord.copy(deep=True).to_dict()
     parallel_coord = {}
     coord_data = np.array(coord['data'])
-    if len(coord_data.shape)>1:
+    if len(coord_data.shape) > 1:
         raise ValueError
 
     nx = len(coord_data)
     dxs = coord_data[1:] - coord_data[:-1]
-    jumps0 = np.argwhere(dxs>gap).flatten()
-    jumps = [0]+list(jumps0) + [nx]
+    jumps0 = np.argwhere(dxs > gap).flatten()
+    jumps = [0] + list(jumps0) + [nx]
     data_chunk_edges = []
     data_chunks = {}
     for i, rnge in enumerate(itertools.pairwise(jumps)):
         i0, i1 = rnge
         data_chunks[i] = coord_data[range(*rnge)]
-        data_chunk_edges.extend([coord_data[i0], coord_data[i1-1]])
+        data_chunk_edges.extend([coord_data[i0], coord_data[i1 - 1]])
         parallel_coord['data_chunks'] = data_chunks
         parallel_coord['data_chunk_edges'] = data_chunk_edges
         parallel_coord['data'] = coord_data
@@ -253,25 +253,24 @@ def make_parallel_coord_by_gap(coord: Union[Dict, xr.DataArray],
     return parallel_coord
 
 
-
 def interpolate_data_coords_onto_parallel_coords(
-    parallel_coords: dict,
-    input_data: Union[Dict, processing_set],
-    interpolation_method: {
-        "linear",
-        "nearest",
-        "nearest-up",
-        "zero",
-        "slinear",
-        "quadratic",
-        "cubic",
-        "previous",
-        "next",
-    } = "nearest",
-    assume_sorted: bool = True,
-    ps_partition: Optional[
-        str
-    ] = None,  # Current options are {'field_name', 'spectral_window_name'}
+        parallel_coords: dict,
+        input_data: Union[Dict, processing_set],
+        interpolation_method: {
+            "linear",
+            "nearest",
+            "nearest-up",
+            "zero",
+            "slinear",
+            "quadratic",
+            "cubic",
+            "previous",
+            "next",
+        } = "nearest",
+        assume_sorted: bool = True,
+        ps_partition: Optional[
+            list[str]
+        ] = None,  # Current options are {'field_name', 'spectral_window_name'}
 ) -> Dict:
     """Interpolate data_coords onto parallel_coords to create the ``node_task_data_mapping``.
 
@@ -415,10 +414,10 @@ def interpolate_data_coords_onto_parallel_coords(
                     if interp_index[i] == -1 and interp_index[i + 1] == -1:
                         chunk_indx_start_stop[chunk_index] = slice(None)
                         if (
-                            pc["data_chunks_edges"][i] < input_data[xds_name][dim][0]
+                                pc["data_chunks_edges"][i] < input_data[xds_name][dim][0]
                         ) and (
-                            pc["data_chunks_edges"][i + 1]
-                            > input_data[xds_name][dim][-1]
+                                pc["data_chunks_edges"][i + 1]
+                                > input_data[xds_name][dim][-1]
                         ):
                             interp_index[i] = 0
                             interp_index[i + 1] = -2
@@ -489,7 +488,7 @@ def interpolate_data_coords_onto_parallel_coords(
 
                 #
                 if (
-                    empty_chunk
+                        empty_chunk
                 ):  # The xds with xds_name has no data for the parallel chunk (no slice on one of the dims).
                     del node_task_data_mapping[task_id]["data_selection"][xds_name]
             task_id += 1
@@ -594,7 +593,7 @@ def _partition_ps_by_non_dimensions(ps, ps_partition_keys):
     d = {}
     # We loop over the cartersian product of the keys
     for multi_index in itertools.product(
-        *[ps_split_map[key] for key in ps_partition_keys]
+            *[ps_split_map[key] for key in ps_partition_keys]
     ):
         # And for each key we look up the corresponding set of xds names
         sets = [

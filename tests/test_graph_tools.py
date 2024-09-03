@@ -21,7 +21,7 @@ def test_map_reduce():
         obs_modes=["OBSERVE_TARGET#ON_SOURCE"],
     )
 
-    ms_xds = ps["Antennae_North.cal.lsrk.split_0"]
+    ms_xds = ps["Antennae_North.cal.lsrk.split.py39_0"]
 
     from graphviper.graph_tools.coordinate_utils import make_parallel_coord
 
@@ -85,7 +85,7 @@ def test_map_reduce():
 
     dask_graph = generate_dask_workflow(graph_reduce)
 
-    assert dask.compute(dask_graph)[0] == 44544495255.635056
+    assert dask.compute(dask_graph)[0] == 59392660322.513405
 
 
 def test_ps_partition():
@@ -118,7 +118,9 @@ def test_ps_partition():
     # Let's try an empty parallel coord map first
     parallel_coords = {}
     node_task_data_mapping = interpolate_data_coords_onto_parallel_coords(
-        parallel_coords, ps, ps_partition=["spectral_window_name"]
+        parallel_coords=parallel_coords,
+        input_data=ps,
+        ps_partition=["spectral_window_name"]
     )
 
     # print(node_task_data_mapping)

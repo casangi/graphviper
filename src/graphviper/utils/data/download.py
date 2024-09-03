@@ -284,7 +284,7 @@ def _download(file: str, folder: str = ".") -> NoReturn:
             return
 
         if file not in file_meta_data["metadata"].keys():
-            logger.error("Requested file not found: {file}")
+            logger.error(f"Requested file not found: {file}")
             logger.info(
                 f"For a list of available files try using "
                 f"{colorize.blue('graphviper.utils.data.list_files()')}."
