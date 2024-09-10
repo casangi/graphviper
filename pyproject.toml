@@ -1,6 +1,6 @@
 [project]
 name = "graphviper"
-version = "0.0.27"
+version = "0.0.28"
 description = "Visibility and Image Parallel Execution Reduction for Radio Astronomy"
 authors = [
     {name = "Jan-Willem Steeb", email="jsteeb@nrao.edu"},
