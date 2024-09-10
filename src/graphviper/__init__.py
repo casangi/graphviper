@@ -1,13 +1,13 @@
 import os
 
 from importlib.metadata import version
-from graphviper.utils.logger import setup_logger
+from toolviper.utils.logger import setup_logger
 
 __version__ = version("graphviper")
 
 # Setup default logger instance for module
-if not os.getenv("VIPER_LOGGER_NAME"):
-    os.environ["VIPER_LOGGER_NAME"] = "graphviper"
+if not os.getenv("LOGGER_NAME"):
+    os.environ["LOGGER_NAME"] = "graphviper"
     setup_logger(
         logger_name="graphviper",
         log_to_term=True,

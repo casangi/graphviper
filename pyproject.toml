@@ -27,6 +27,7 @@ dependencies = [
     'pytest-html',
     'rich',
     'scipy',
+    'toolviper',
     'tqdm',
     'xarray',
     'zarr',
