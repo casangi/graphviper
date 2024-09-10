@@ -1,5 +1,5 @@
 def test_map_reduce():
-    from graphviper.utils.data import download
+    from toolviper.utils.data import download
     from graphviper.graph_tools.map import map
     from graphviper.graph_tools.coordinate_utils import (
         interpolate_data_coords_onto_parallel_coords,
@@ -7,7 +7,7 @@ def test_map_reduce():
     from graphviper.graph_tools.generate_dask_workflow import generate_dask_workflow
     import dask
 
-    from graphviper.dask.client import local_client
+    from toolviper.dask.client import local_client
 
     viper_client = local_client(cores=2, memory_limit="3GB", autorestrictor=True)
 
@@ -94,7 +94,7 @@ def test_ps_partition():
     msv2name = "VLBA_TL016B_split.ms"
     zarrPath = str(pathlib.Path(msv2name).with_suffix(".zarr"))
 
-    from graphviper.utils.data import download
+    from toolviper.utils.data import download
 
     download(file=msv2name)
 

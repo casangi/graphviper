@@ -3,6 +3,4 @@ include MANIFEST.in
 include LICENSE
 include CONTRIBUTOR_LICENSING_AGREEMENT
 
-recursive-include src/graphviper/utils/data *
-recursive-include src/graphviper/utils/data/.dropbox *
 recursive-include src/graphviper/config *

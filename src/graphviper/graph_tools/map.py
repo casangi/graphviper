@@ -4,7 +4,7 @@ import dask
 import datetime
 
 import numpy as np
-import graphviper.utils.logger as logger
+import toolviper.utils.logger as logger
 
 from typing import Dict, Union
 from typing import Callable, Any, Tuple, Dict
@@ -38,7 +38,7 @@ def map(
         Setting ``in_memory_compute`` can lead to memory issues since all data is loaded into memory. Consequently, this option should only be used for testing purposes. If true the lazy arrays in ``input_data`` are loaded into memory using `xarray.Dataset.load <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.load.html>`_ , by default False.
         See notes of how to access data in ``node_task``.
     client : optional
-        The Dask client is only required if local caching is enabled see :func:`graphviper.dask.client.slurm_cluster_client` , by default None.
+        The Dask client is only required if local caching is enabled see :func:`toolviper.dask.client.slurm_cluster_client` , by default None.
     date_time : str, optional
         Used to annotate local cache, by default None.
 
@@ -78,7 +78,7 @@ def map(
     """
     n_tasks = len(node_task_data_mapping)
 
-    # Get local_cache configuration if enabled in graphviper.dask.client.slurm_cluster_client.
+    # Get local_cache configuration if enabled in toolviper.dask.client.slurm_cluster_client.
     # local_cache will be True if enabled.
     (
         local_cache,
