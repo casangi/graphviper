@@ -8,12 +8,12 @@ import toolviper.utils.logger as logger
 
 from typing import Dict, Union
 from typing import Callable, Any, Tuple, Dict
-from xradio.vis._processing_set import processing_set
+from xradio.correlated_data import ProcessingSet
 import copy
 
 
 def map(
-    input_data: Union[Dict, processing_set],
+    input_data: Union[Dict, ProcessingSet],
     node_task_data_mapping: dict,
     node_task: Callable[..., Any],
     input_params: dict,
@@ -25,8 +25,8 @@ def map(
 
     Parameters
     ----------
-    input_data : Union[Dict, processing_set]
-        Can either be a `processing_set <https://github.com/casangi/xradio/blob/main/src/xradio/vis/_processing_set.py>`_ or a Dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_. Only coordinates are needed so no actual data is loaded into memory (except if ``in_memory_compute`` is True).
+    input_data : Union[Dict, ProcessingSet]
+        Can either be a `ProcessingSet <https://github.com/casangi/xradio/blob/main/src/xradio/correlated_data/processing_set>`_ or a Dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_. Only coordinates are needed so no actual data is loaded into memory (except if ``in_memory_compute`` is True).
     node_task_data_mapping :
         Node task data mapping dictionary. See :ref:`notes <node task data mapping>` for structure of dictionary.
     node_task : Callable[..., Any]
@@ -120,8 +120,8 @@ def map(
 
 
 def _select_data(input_data, data_selection):
-    if isinstance(input_data, processing_set):
-        input_data_sel = processing_set()
+    if isinstance(input_data, ProcessingSet):
+        input_data_sel = ProcessingSet()
     else:
         input_data_sel = {}
 
