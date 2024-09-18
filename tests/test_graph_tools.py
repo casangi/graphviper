@@ -14,14 +14,14 @@ def test_map_reduce():
     ps_store = "Antennae_North.cal.lsrk.split.py39.vis.zarr"
     download(file=ps_store, threaded=False)
 
-    from xradio.vis.read_processing_set import read_processing_set
+    from xradio.correlated_data import open_processing_set
 
-    ps = read_processing_set(
+    ps = open_processing_set(
         ps_store=ps_store,
-        obs_modes=["OBSERVE_TARGET#ON_SOURCE"],
+        intents=["OBSERVE_TARGET#ON_SOURCE"],
     )
 
-    ms_xds = ps["Antennae_North.cal.lsrk.split.py39_0"]
+    ms_xds = ps["Antennae_North.cal.lsrk.split_0"]
 
     from graphviper.graph_tools.coordinate_utils import make_parallel_coord
 
@@ -37,7 +37,7 @@ def test_map_reduce():
     )
 
     def my_func(input_params):
-        from xradio.vis.load_processing_set import load_processing_set
+        from xradio.correlated_data import load_processing_set
 
         # print(input_params.keys())
         ps = load_processing_set(
@@ -98,15 +98,15 @@ def test_ps_partition():
 
     download(file=msv2name)
 
-    from xradio.vis.convert_msv2_to_processing_set import convert_msv2_to_processing_set
+    from xradio.correlated_data import convert_msv2_to_processing_set
 
     convert_msv2_to_processing_set(
         in_file=msv2name, out_file=zarrPath, partition_scheme=[], overwrite=True
     )
 
-    from xradio.vis.read_processing_set import read_processing_set
+    from xradio.correlated_data import open_processing_set
 
-    ps = read_processing_set(zarrPath)
+    ps = open_processing_set(zarrPath)
 
     # print(ps.summary())
 
@@ -120,7 +120,7 @@ def test_ps_partition():
     node_task_data_mapping = interpolate_data_coords_onto_parallel_coords(
         parallel_coords=parallel_coords,
         input_data=ps,
-        ps_partition=["spectral_window_name"]
+        ps_partition=["spectral_window_name"],
     )
 
     # print(node_task_data_mapping)
