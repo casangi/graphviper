@@ -14,14 +14,16 @@ def test_map_reduce():
     ps_store = "Antennae_North.cal.lsrk.split.py39.vis.zarr"
     download(file=ps_store, threaded=False)
 
-    from xradio.correlated_data import open_processing_set
+    from xradio.measurement_set import open_processing_set
 
     ps = open_processing_set(
         ps_store=ps_store,
         intents=["OBSERVE_TARGET#ON_SOURCE"],
     )
 
-    ms_xds = ps["Antennae_North.cal.lsrk.split_0"]
+    # print(ps.summary())
+
+    ms_xds = ps["Antennae_North.cal.lsrk.split_00"]
 
     from graphviper.graph_tools.coordinate_utils import make_parallel_coord
 
@@ -37,7 +39,7 @@ def test_map_reduce():
     )
 
     def my_func(input_params):
-        from xradio.correlated_data import load_processing_set
+        from xradio.measurement_set import load_processing_set
 
         # print(input_params.keys())
         ps = load_processing_set(
@@ -85,7 +87,7 @@ def test_map_reduce():
 
     dask_graph = generate_dask_workflow(graph_reduce)
 
-    assert dask.compute(dask_graph)[0] == 59392660322.513405
+    assert dask.compute(dask_graph)[0] == 178177980857.54022
 
 
 def test_ps_partition():
@@ -98,13 +100,13 @@ def test_ps_partition():
 
     download(file=msv2name)
 
-    from xradio.correlated_data import convert_msv2_to_processing_set
+    from xradio.measurement_set import convert_msv2_to_processing_set
 
     convert_msv2_to_processing_set(
         in_file=msv2name, out_file=zarrPath, partition_scheme=[], overwrite=True
     )
 
-    from xradio.correlated_data import open_processing_set
+    from xradio.measurement_set import open_processing_set
 
     ps = open_processing_set(zarrPath)
 

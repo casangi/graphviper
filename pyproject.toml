@@ -1,6 +1,6 @@
 [project]
 name = "graphviper"
-version = "0.0.29"
+version = "0.0.30"
 description = "Visibility and Image Parallel Execution Reduction for Radio Astronomy "
 authors = [
     {name = "Jan-Willem Steeb", email="jsteeb@nrao.edu"},
@@ -35,7 +35,7 @@ dependencies = [
     'jupyterlab',
     'pyarrow',
     'graphviz',
-    'xradio>=0.0.41',
+    'xradio>=0.0.43',
     'rich',
     'python_casacore>=3.6.1; sys_platform != "darwin" '
 ]

@@ -8,7 +8,7 @@ import toolviper.utils.logger as logger
 
 from typing import Dict, Union
 from typing import Callable, Any, Tuple, Dict
-from xradio.correlated_data import ProcessingSet
+from xradio.measurement_set import ProcessingSet
 import copy
 
 

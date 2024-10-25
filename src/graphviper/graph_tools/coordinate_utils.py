@@ -6,7 +6,7 @@ import xarray as xr
 import toolviper.utils.logger as logger
 
 from typing import Dict, Union, Optional, Hashable
-from xradio.correlated_data import ProcessingSet
+from xradio.measurement_set import ProcessingSet
 from scipy.interpolate import interp1d
 
 
