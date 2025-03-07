@@ -1,6 +1,6 @@
 [project]
 name = "graphviper"
-version = "0.0.30"
+version = "0.0.31"
 description = "Visibility and Image Parallel Execution Reduction for Radio Astronomy "
 authors = [
     {name = "Jan-Willem Steeb", email="jsteeb@nrao.edu"},
@@ -8,7 +8,7 @@ authors = [
 ]
 license = {file = "LICENSE.txt"}
 readme = "README.md"
-requires-python = ">= 3.9, < 3.13"
+requires-python = ">= 3.9, < 3.14"
 
 dependencies = [
     'astropy',
