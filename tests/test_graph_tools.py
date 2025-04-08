@@ -8,11 +8,23 @@ def test_map_reduce():
     import dask
 
     from toolviper.dask.client import local_client
+    
+    from xradio.measurement_set import (
+        convert_msv2_to_processing_set,
+        )
 
     viper_client = local_client(cores=2, memory_limit="3GB", autorestrictor=True)
 
-    ps_store = "Antennae_North.cal.lsrk.split.py39.vis.zarr"
-    download(file=ps_store, threaded=False)
+    ms_name = "Antennae_North.cal.lsrk.split.ms"
+    ps_store = "Antennae_North.cal.lsrk.split.ps.zarr"
+    download(file=ms_name, threaded=False)
+    
+    convert_msv2_to_processing_set(
+        in_file= ms_name,
+        out_file=ps_store,
+        overwrite=True
+    )
+    
 
     from xradio.measurement_set import open_processing_set
 
@@ -94,7 +106,7 @@ def test_ps_partition():
     import pathlib
 
     msv2name = "VLBA_TL016B_split.ms"
-    zarrPath = str(pathlib.Path(msv2name).with_suffix(".zarr"))
+    zarrPath = "VLBA_TL016B_split.ps.zarr"
 
     from toolviper.utils.data import download
 
@@ -133,7 +145,7 @@ def test_ps_partition():
             len(
                 set(
                     [
-                        ps[k].attrs["partition_info"]["spectral_window_name"]
+                        ps[k].frequency.attrs["spectral_window_name"]
                         for k in dm["data_selection"].keys()
                     ]
                 )

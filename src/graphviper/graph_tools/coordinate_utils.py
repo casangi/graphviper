@@ -6,7 +6,6 @@ import xarray as xr
 import toolviper.utils.logger as logger
 
 from typing import Dict, Union, Optional, Hashable
-from xradio.measurement_set import ProcessingSet
 from scipy.interpolate import interp1d
 
 
@@ -254,7 +253,7 @@ def make_parallel_coord_by_gap(coord: Union[Dict, xr.DataArray], gap: float) -> 
 
 def interpolate_data_coords_onto_parallel_coords(
     parallel_coords: dict,
-    input_data: Union[Dict, ProcessingSet],
+    input_data: Union[Dict, xr.DataTree],
     interpolation_method: {
         "linear",
         "nearest",
@@ -580,8 +579,9 @@ def _partition_ps_by_non_dimensions(ps, ps_partition_keys):
     "This requires at least one member of ps_partition_keys!"
     ps_split_map = {}
     for name, xds in ps.items():
+        partition_info = xds.xr_ms.get_partition_info()
         for key in ps_partition_keys:
-            val_for_xds = xds.attrs["partition_info"][key]
+            val_for_xds = partition_info[key]
             # OK I think I can punt: the key should probably be an integer but that doesn't feel very Pythonic
             # But I *can* reasonably demand it is hashable
             if not isinstance(val_for_xds, Hashable):

@@ -8,12 +8,12 @@ import toolviper.utils.logger as logger
 
 from typing import Dict, Union
 from typing import Callable, Any, Tuple, Dict
-from xradio.measurement_set import ProcessingSet
+import xarray as xr
 import copy
 
 
 def map(
-    input_data: Union[Dict, ProcessingSet],
+    input_data: Union[Dict, xr.DataTree],
     node_task_data_mapping: dict,
     node_task: Callable[..., Any],
     input_params: dict,
