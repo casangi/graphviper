@@ -8,23 +8,18 @@ def test_map_reduce():
     import dask
 
     from toolviper.dask.client import local_client
-    
+
     from xradio.measurement_set import (
         convert_msv2_to_processing_set,
-        )
+    )
 
     viper_client = local_client(cores=2, memory_limit="3GB", autorestrictor=True)
 
     ms_name = "Antennae_North.cal.lsrk.split.ms"
     ps_store = "Antennae_North.cal.lsrk.split.ps.zarr"
     download(file=ms_name, threaded=False)
-    
-    convert_msv2_to_processing_set(
-        in_file= ms_name,
-        out_file=ps_store,
-        overwrite=True
-    )
-    
+
+    convert_msv2_to_processing_set(in_file=ms_name, out_file=ps_store, overwrite=True)
 
     from xradio.measurement_set import open_processing_set
 
