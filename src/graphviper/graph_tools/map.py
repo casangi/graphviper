@@ -121,7 +121,7 @@ def map(
 
 def _select_data(input_data, data_selection):
     if isinstance(input_data, xr.DataTree):
-        input_data_sel =  xr.DataTree()
+        input_data_sel = xr.DataTree()
     else:
         input_data_sel = {}
 
