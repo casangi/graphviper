@@ -18,7 +18,7 @@ GraphVIPER (Visibility and Image Parallel Execution Reduction) is a [Dask](https
 The best place to start with GraphVIPER is doing the [graph building tutorial](https://graphviper.readthedocs.io/en/latest/graph_building_tutorial.html).
 
 
-.. |Coverage| image:: https://codecov.io/gh/casangi/graphviper/branch/main/graphviper/badge.svg
+.. |Coverage| image:: https://codecov.io/gh/casangi/graphviper/branch/main/graph/badge.svg
    :target: https://codecov.io/gh/casangi/graphviper/branch/main/graphviper
    :alt: Coverage status
 

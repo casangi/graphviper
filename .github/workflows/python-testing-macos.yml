@@ -5,7 +5,11 @@ on:
     paths-ignore:
       - '**.md'
       - '**.rst'
-
+  pull_request: 
+    paths-ignore:
+      - '**.md'
+      - '**.rst'
+    
 jobs:
   build:
     name: macos (${{ matrix.python-version }}, ${{ matrix.os }})
@@ -23,7 +27,7 @@ jobs:
         uses: conda-incubator/setup-miniconda@v3
         with:
           auto-activate-base: false
-          activate-environment: xradiotest
+          activate-environment: test
           auto-update-conda: true
           python-version: ${{ matrix.python-version }}
           channels: conda-forge
