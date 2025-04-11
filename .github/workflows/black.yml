@@ -1,0 +1,6 @@
+# Run Black using template in ToolVIPER
+on: [push, pull_request]
+
+jobs:
+    call-testing-linux:
+      uses: casangi/toolviper/.github/workflows/black-template.yml@main
