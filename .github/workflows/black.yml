@@ -1,4 +1,6 @@
 # Run Black using template in ToolVIPER
+name: Black
+
 on: [push, pull_request]
 
 jobs:

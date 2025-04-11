@@ -1,18 +1,16 @@
 # GraphVIPER
 
 [![Python 3.11 3.12 3.13](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/downloads/release/python-3130/)
-![Linux Tests](https://github.com/casangi/toolviper/actions/workflows/python-testing-linux.yml/badge.svg?branch=main)
-![macOS Tests](https://github.com/casangi/toolviper/actions/workflows/python-testing-macos.yml/badge.svg?branch=main)
-![ipynb Tests](https://github.com/casangi/toolviper/actions/workflows/run-ipynb.yml/badge.svg?branch=main)
-[![Coverage](https://codecov.io/gh/casangi/toolviper/branch/main/graph/badge.svg)](https://codecov.io/gh/casangi/toolviper/branch/main/toolviper)
-<!-- [![Documentation Status](https://readthedocs.org/projects/toolviper/badge/?version=latest)](https://toolviper.readthedocs.io) -->
-[![Version Status](https://img.shields.io/pypi/v/toolviper.svg)](https://pypi.python.org/pypi/toolviper/)
+![Linux Tests](https://github.com/casangi/graphviper/actions/workflows/python-testing-linux.yml/badge.svg?branch=main)
+![macOS Tests](https://github.com/casangi/graphviper/actions/workflows/python-testing-macos.yml/badge.svg?branch=main)
+![ipynb Tests](https://github.com/casangi/graphviper/actions/workflows/run-ipynb.yml/badge.svg?branch=main)
+[![Coverage](https://codecov.io/gh/casangi/graphviper/branch/main/graph/badge.svg)](https://codecov.io/gh/casangi/graphviper/branch/main/graphviper)
+[![Documentation Status](https://readthedocs.org/projects/graphviper/badge/?version=latest)](https://graphviper.readthedocs.io)
+[![Version Status](https://img.shields.io/pypi/v/graphviper.svg)](https://pypi.python.org/pypi/graphviper/)
 
 GraphVIPER (Visibility and Image Parallel Execution Reduction) is a [Dask](https://docs.dask.org/) based MapReduce package. It allows for mapping a dictionary of [xarray.Dataset](https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html)s to [Dask graph nodes](https://docs.dask.org/en/latest/graphs.html) followed by a reduce step.
 
 **GraphVIPER is in development and breaking API changes will happen.**
-
-[Documentation Link](https://graphviper.readthedocs.io/en/latest)
 
 The best place to start with GraphVIPER is doing the [graph building tutorial](https://graphviper.readthedocs.io/en/latest/graph_building_tutorial.html).
 
