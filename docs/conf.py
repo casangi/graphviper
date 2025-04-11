@@ -62,7 +62,7 @@ Open in Colab: https://colab.research.google.com/github/casangi/graph_viper/blob
 ----
 """
 
-autoapi_dirs = ["../src/toolviper/dask", "../src/graphviper/graph_tools"]
+autoapi_dirs = ["../src/graphviper/graph_tools"]
 autoapi_add_toctree_entry = False
 autoapi_generate_api_docs = True
 autoapi_root = "_api/autoapi"
