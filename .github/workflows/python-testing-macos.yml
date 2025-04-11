@@ -1,0 +1,16 @@
+# Run MacOS tests using template in ToolVIPER
+name: MacOS Tests
+
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+      - '**.rst'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - '**.rst'
+
+jobs:
+  call-testing-linux:
+    uses: casangi/toolviper/.github/workflows/python-testing-macos-template.yml@main
