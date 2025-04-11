@@ -1,4 +1,4 @@
-# .github/workflows/python-testing-linux.yml
+# Run Linux tests using template in ToolVIPER
 name: Linux Tests
 
 on:
