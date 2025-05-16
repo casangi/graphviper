@@ -16,6 +16,10 @@ dependencies = [
 
 
 [project.optional-dependencies]
+python_casacore = [    
+    'python_casacore>=3.6.1; sys_platform != "darwin"'
+]
+
 test = [
     'pytest',
     'pytest-cov',
@@ -52,6 +56,7 @@ docs = [
 ]
 
 all = [
+    'python_casacore>=3.6.1; sys_platform != "darwin"',
     'pytest',
     'pytest-cov',
     'pytest-html',
