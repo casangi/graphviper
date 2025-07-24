@@ -17,7 +17,7 @@ def test_map_reduce():
 
     ms_name = "Antennae_North.cal.lsrk.split.ms"
     ps_store = "Antennae_North.cal.lsrk.split.ps.zarr"
-    download(file=ms_name, threaded=False)
+    download(file=ms_name)
 
     convert_msv2_to_processing_set(in_file=ms_name, out_file=ps_store, overwrite=True)
 
