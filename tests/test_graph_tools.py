@@ -19,13 +19,19 @@ def test_map_reduce():
     ps_store = "Antennae_North.cal.lsrk.split.ps.zarr"
     download(file=ms_name)
 
-    convert_msv2_to_processing_set(in_file=ms_name, out_file=ps_store, overwrite=True)
+    convert_msv2_to_processing_set(
+        in_file=ms_name,
+        out_file=ps_store,
+        overwrite=True,
+        partition_scheme=["FIELD_ID"],
+        parallel_mode="partition",
+    )
 
     from xradio.measurement_set import open_processing_set
 
     ps = open_processing_set(
         ps_store=ps_store,
-        intents=["OBSERVE_TARGET#ON_SOURCE"],
+        scan_intents=["OBSERVE_TARGET#ON_SOURCE"],
     )
 
     # print(ps.summary())

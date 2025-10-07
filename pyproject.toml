@@ -11,7 +11,7 @@ readme = "README.md"
 requires-python = ">= 3.11, < 3.14"
 
 dependencies = [
-    'xradio>=0.0.56',
+    'xradio>=1.0.0',
 ]
 
 
