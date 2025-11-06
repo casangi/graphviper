@@ -586,7 +586,7 @@ def _partition_ps_by_non_dimensions(ps, ps_partition_keys):
             # But I *can* reasonably demand it is hashable
             if not isinstance(val_for_xds, Hashable):
                 raise ValueError(
-                    "Can't split by {key}; value {val_for_xds} is not suitable for splitting"
+                    f"Can't split by {key}; value {val_for_xds} is not suitable for splitting"
                 )
             ps_split_map.setdefault(key, {}).setdefault(val_for_xds, []).append(name)
     d = {}
