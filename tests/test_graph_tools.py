@@ -1,3 +1,20 @@
+from importlib.metadata import files
+
+
+def delete_files(filepaths=None):
+    import os
+    import shutil
+
+    if filepaths is None:
+        return
+    for file in filepaths:
+        print(f"Removing {file}...")
+        if os.path.isdir(file):
+            shutil.rmtree(file)
+        elif os.path.isfile(file):
+            os.remove(file)
+
+
 def test_map_reduce():
     from toolviper.utils.data import download
     from graphviper.graph_tools.map import map
@@ -101,6 +118,9 @@ def test_map_reduce():
     dask_graph = generate_dask_workflow(graph_reduce)
 
     assert dask.compute(dask_graph)[0] == 178177980857.54022
+    delete_files(
+        filepaths=[ms_name, ps_store],
+    )
 
 
 def test_ps_partition():
@@ -135,11 +155,11 @@ def test_ps_partition():
     node_task_data_mapping = interpolate_data_coords_onto_parallel_coords(
         parallel_coords=parallel_coords,
         input_data=ps,
-        ps_partition=["spectral_window_name"],
+        ps_partition=["spectral_window_name", "field_name"],
     )
 
     # print(node_task_data_mapping)
-    assert len(node_task_data_mapping.keys()) == 2
+    assert len(node_task_data_mapping.keys()) == 4
     # We check that for each data selection the spw_id is unique:
     spw_split_success = all(
         [
@@ -157,11 +177,14 @@ def test_ps_partition():
     )
     assert spw_split_success
 
+    delete_files(
+        filepaths=[msv2name, zarrPath],
+    )
+
 
 if __name__ == "__main__":
     test_map_reduce()
     test_ps_partition()
-
 """
 chunk_indx 0 (0, 0)
 chunk_indx 1 (0, 1)
