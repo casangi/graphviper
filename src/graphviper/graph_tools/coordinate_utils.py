@@ -582,13 +582,28 @@ def _partition_ps_by_non_dimensions(ps, ps_partition_keys):
         partition_info = xds.xr_ms.get_partition_info()
         for key in ps_partition_keys:
             val_for_xds = partition_info[key]
+            # value could be a list
+            list_for_xds = None
+            if isinstance(val_for_xds, list):
+                list_for_xds = val_for_xds
             # OK I think I can punt: the key should probably be an integer but that doesn't feel very Pythonic
             # But I *can* reasonably demand it is hashable
-            if not isinstance(val_for_xds, Hashable):
-                raise ValueError(
-                    f"Can't split by {key}; value {val_for_xds} is not suitable for splitting"
+            if list_for_xds is not None:
+                for v in list_for_xds:
+                    if not isinstance(v, Hashable):
+                        raise ValueError(
+                            f"Can't split by {key}; value {v} is not suitable for splitting"
+                        )
+                    ps_split_map.setdefault(key, {}).setdefault(v, []).append(name)
+            else:
+                if not isinstance(val_for_xds, Hashable):
+                    raise ValueError(
+                        f"Can't split by {key}; value {val_for_xds} is not suitable for splitting"
+                    )
+                ps_split_map.setdefault(key, {}).setdefault(val_for_xds, []).append(
+                    name
                 )
-            ps_split_map.setdefault(key, {}).setdefault(val_for_xds, []).append(name)
+
     d = {}
     # We loop over the cartersian product of the keys
     for multi_index in itertools.product(
