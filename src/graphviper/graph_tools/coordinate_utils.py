@@ -387,17 +387,21 @@ def interpolate_data_coords_onto_parallel_coords(
         for xds_name in input_data:
             for dim, pc in parallel_coords.items():
                 xds = input_data[xds_name]
-                
-                if input_data[xds_name][dim].dtype.kind in ('U','S','O'):
+
+                if input_data[xds_name][dim].dtype.kind in ("U", "S", "O"):
                     # For string arrays, we perform exact matching only.
                     # We map each string to its integer index.
-                    string_to_idx = {val: i for i, val in enumerate(input_data[xds_name][dim].values)}
-                    
+                    string_to_idx = {
+                        val: i for i, val in enumerate(input_data[xds_name][dim].values)
+                    }
+
                     # Create a vectorized lookup function
                     # Values not found in the input data return -1
                     def string_interpolator(query_values):
-                        return np.array([string_to_idx.get(val, -1) for val in query_values])
-                    
+                        return np.array(
+                            [string_to_idx.get(val, -1) for val in query_values]
+                        )
+
                     interpolator = string_interpolator
                 else:
                     interpolator = interp1d(
