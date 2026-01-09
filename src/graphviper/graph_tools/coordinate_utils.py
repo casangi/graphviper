@@ -270,7 +270,7 @@ def interpolate_data_coords_onto_parallel_coords(
         list[str]
     ] = None,  # Current options are {'field_name', 'spectral_window_name'}
 ) -> Dict:
-    """Interpolate data_coords onto parallel_coords to create the ``node_task_data_mapping``.
+    """Interpolate data_coords onto parallel_coords to create the ``node_task_data_mapping``. For the case of string coordinates (for example antenna_name), only exact matching is performed.
 
     Parameters
     ----------
@@ -386,26 +386,41 @@ def interpolate_data_coords_onto_parallel_coords(
     for partition in partition_map:
         for xds_name in input_data:
             for dim, pc in parallel_coords.items():
-                xds = input_data[xds_name]
 
-                interpolator = interp1d(
-                    input_data[xds_name][dim].values,
-                    np.arange(len(input_data[xds_name][dim].values)),
-                    kind=interpolation_method,
-                    bounds_error=False,
-                    fill_value=-1,
-                    # fill_value="extrapolate",
-                    assume_sorted=assume_sorted,
-                )
-
-                chunk_indx_start_stop = {}
                 # Interpolate all the chunk edges. This is done for performance reasons.
-
                 if "data_chunks_edges" not in pc:
                     pc["data_chunks_edges"] = _array_split_edges(pc["data_chunks"])
 
-                interp_index = interpolator(pc["data_chunks_edges"]).astype(int)
+                if input_data[xds_name][dim].dtype.kind in ("U", "S", "O"):
+                    # For string arrays, we perform exact matching only.
+                    # We map each string to its integer index.
+                    string_to_idx = {
+                        val: i for i, val in enumerate(input_data[xds_name][dim].values)
+                    }
 
+                    # Create a vectorized lookup function
+                    # Values not found in the input data return -1
+                    def string_interpolator(query_values, string_to_idx):
+                        return np.array(
+                            [string_to_idx.get(val, -1) for val in query_values]
+                        )
+
+                    interp_index = string_interpolator(
+                        pc["data_chunks_edges"], string_to_idx
+                    ).astype(int)
+                else:
+                    interpolator = interp1d(
+                        input_data[xds_name][dim].values,
+                        np.arange(len(input_data[xds_name][dim].values)),
+                        kind=interpolation_method,
+                        bounds_error=False,
+                        fill_value=-1,
+                        # fill_value="extrapolate",
+                        assume_sorted=assume_sorted,
+                    )
+                    interp_index = interpolator(pc["data_chunks_edges"]).astype(int)
+
+                chunk_indx_start_stop = {}
                 i = 0
                 # Split the interp_index for each chunk and fix any boundary issues.
                 for chunk_index in sorted(pc["data_chunks"].keys()):
