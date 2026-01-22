@@ -39,7 +39,7 @@ def test_map_reduce():
     convert_msv2_to_processing_set(
         in_file=ms_name,
         out_file=ps_store,
-        overwrite=True,
+        persistence_mode="w",
         partition_scheme=["FIELD_ID"],
         parallel_mode="partition",
     )
@@ -136,7 +136,7 @@ def test_ps_partition():
     from xradio.measurement_set import convert_msv2_to_processing_set
 
     convert_msv2_to_processing_set(
-        in_file=msv2name, out_file=zarrPath, partition_scheme=[], overwrite=True
+        in_file=msv2name, out_file=zarrPath, partition_scheme=[], persistence_mode="w"
     )
 
     from xradio.measurement_set import open_processing_set
