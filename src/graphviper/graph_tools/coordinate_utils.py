@@ -191,6 +191,9 @@ def make_parallel_coord(
         parallel_coord["data_chunks_edges"] = _array_split_edges(
             parallel_coord["data_chunks"]
         )
+        parallel_coord["data_chunk_slices"] = _array_split_slices(
+            parallel_coord["data_chunks"]
+        )
     elif gap is not None and n_chunks is None:
         coord_data = coord["data"]
         if len(coord_data.shape) > 1:
@@ -201,14 +204,18 @@ def make_parallel_coord(
         jumps = [0] + list(jumps0) + [nx]
         data_chunk_edges = []
         data_chunks = {}
+        data_chunk_slices = {}
         for i, rnge in enumerate(itertools.pairwise(jumps)):
             i0, i1 = rnge
             data_chunks[i] = coord_data[i0:i1]
             data_chunk_edges.extend([coord_data[i0], coord_data[i1 - 1]])
+            data_chunk_slices[i] = slice(i0, i1)
         parallel_coord["data_chunks"] = data_chunks
         parallel_coord["data_chunk_edges"] = data_chunk_edges
+        parallel_coord["data_chunk_slices"] = data_chunk_slices
     else:
         raise ValueError("Exactly one of n_chunks and gap must be specified")
+    
     parallel_coord["dims"] = coord["dims"]
     parallel_coord["attrs"] = coord["attrs"]
     return parallel_coord
@@ -456,6 +463,8 @@ def interpolate_data_coords_onto_parallel_coords(
     )  # Nested Dict keys: task_id, [data_selection,chunk_indices,parallel_dims], xds_name, dim.
 
     # Loop over every task node (each task node has a unique task_id):
+    
+
 
     task_id = 0
     for partition in partition_map.keys():
@@ -477,6 +486,8 @@ def interpolate_data_coords_onto_parallel_coords(
                 ]
                 chunk_coords["dims"] = parallel_coords[dim]["dims"]
                 chunk_coords["attrs"] = parallel_coords[dim]["attrs"]
+                chunk_coords["slice"] = parallel_coords[dim]["data_chunk_slices"][chunk_indices[i_dim]]
+                
                 task_coords[dim] = chunk_coords
 
             # breakpoint()
@@ -562,6 +573,31 @@ def _array_split_edges(data_chunks_dict: Dict):
         data_chunks_edges.append(data_chunks_dict[key][0])
         data_chunks_edges.append(data_chunks_dict[key][-1])
     return data_chunks_edges
+
+
+def _array_split_slices(data_chunks_dict: Dict) -> Dict:
+    """
+    Creates a dictionary of slices giving the start and end index of each chunk
+    relative to the full (unsplit) array.
+
+    Parameters
+    ----------
+    data_chunks_dict : Dict
+        Dictionary of integer keys and array values, as returned by _array_split.
+
+    Returns
+    -------
+    Dict
+        Dictionary with the same integer keys as data_chunks_dict, where each
+        value is a slice(start, stop) indexing that chunk in the original array.
+    """
+    slices = {}
+    start = 0
+    for key in sorted(data_chunks_dict.keys()):
+        size = len(data_chunks_dict[key])
+        slices[key] = slice(start, start + size)
+        start += size
+    return slices
 
 
 def _make_iter_chunks_indices(parallel_coords: Dict):
