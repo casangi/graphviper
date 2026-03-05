@@ -215,7 +215,7 @@ def make_parallel_coord(
         parallel_coord["data_chunk_slices"] = data_chunk_slices
     else:
         raise ValueError("Exactly one of n_chunks and gap must be specified")
-    
+
     parallel_coord["dims"] = coord["dims"]
     parallel_coord["attrs"] = coord["attrs"]
     return parallel_coord
@@ -463,8 +463,6 @@ def interpolate_data_coords_onto_parallel_coords(
     )  # Nested Dict keys: task_id, [data_selection,chunk_indices,parallel_dims], xds_name, dim.
 
     # Loop over every task node (each task node has a unique task_id):
-    
-
 
     task_id = 0
     for partition in partition_map.keys():
@@ -487,7 +485,9 @@ def interpolate_data_coords_onto_parallel_coords(
                 chunk_coords["dims"] = parallel_coords[dim]["dims"]
                 chunk_coords["attrs"] = parallel_coords[dim]["attrs"]
                 if "data_chunk_slices" in parallel_coords[dim]:
-                    chunk_coords["slice"] = parallel_coords[dim]["data_chunk_slices"][chunk_indices[i_dim]]
+                    chunk_coords["slice"] = parallel_coords[dim]["data_chunk_slices"][
+                        chunk_indices[i_dim]
+                    ]
                 else:
                     chunk_coords["slice"] = slice(None)
                 task_coords[dim] = chunk_coords
