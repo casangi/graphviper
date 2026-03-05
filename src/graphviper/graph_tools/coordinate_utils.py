@@ -486,8 +486,10 @@ def interpolate_data_coords_onto_parallel_coords(
                 ]
                 chunk_coords["dims"] = parallel_coords[dim]["dims"]
                 chunk_coords["attrs"] = parallel_coords[dim]["attrs"]
-                chunk_coords["slice"] = parallel_coords[dim]["data_chunk_slices"][chunk_indices[i_dim]]
-                
+                if "data_chunk_slices" in parallel_coords[dim]:
+                    chunk_coords["slice"] = parallel_coords[dim]["data_chunk_slices"][chunk_indices[i_dim]]
+                else:
+                    chunk_coords["slice"] = slice(None)
                 task_coords[dim] = chunk_coords
 
             # breakpoint()
