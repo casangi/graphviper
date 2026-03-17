@@ -257,272 +257,6 @@ def make_parallel_coord_by_gap(coord: Union[Dict, xr.DataArray], gap: float) -> 
         parallel_coord["attrs"] = coord["attrs"]
     return parallel_coord
 
-
-def interpolate_data_coords_onto_parallel_coords(
-    parallel_coords: dict,
-    input_data: Union[Dict, xr.DataTree],
-    interpolation_method: {
-        "linear",
-        "nearest",
-        "nearest-up",
-        "zero",
-        "slinear",
-        "quadratic",
-        "cubic",
-        "previous",
-        "next",
-    } = "nearest",
-    assume_sorted: bool = True,
-    ps_partition: Optional[
-        list[str]
-    ] = None,  # Current options are {'field_name', 'spectral_window_name'}
-) -> Dict:
-    """Interpolate data_coords onto parallel_coords to create the ``node_task_data_mapping``. For the case of string coordinates (for example antenna_name), only exact matching is performed.
-
-    Parameters
-    ----------
-    parallel_coords : Dict
-        The parallel coordinates determine the parallelism of the map graph.
-        The keys in the parallel coordinates can by any combination of the dimension coordinates in the input data.
-        See notes in docstring for structure.
-    input_data : Union[Dict, ProcessingSet]
-        Can either be a `ProcessingSet <https://github.com/casangi/xradio/blob/main/src/xradio/correlated_data/processing_set.py>`_ or a Dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_. Only coordinates are needed so no actual data is loaded into memory.
-    interpolation_method :  {"linear", "nearest", "nearest-up", "zero", "slinear", "quadratic", "cubic", "previous", "next",}, optional
-        The kind of interpolation method to use as described in `Scipy documentation <https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interp1d.html>`_ , by default ``nearest``.
-    assume_sorted : bool, optional
-        Are the data in parallel_coords and input_data monotonically increasing in value, by default True.
-    ps_partition : An optional list of strings ('spectral_window_name' and/or 'field_name' are currently supported); if non-empty, the function will use the meta-data of each Dataset to partition the parallel sets by these pseudo-dimensions as well as the actual Dataset dimensions specified.
-    Returns
-    -------
-    Dict :
-         Node task data mapping dictionary. See :ref:`notes <node task data mapping>` for structure of dictionary.
-
-    Notes
-    -----
-    Nomenclature used:
-
-    - ``input data``: A dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_ or a `ProcessingSet <https://github.com/casangi/xradio/blob/main/src/xradio/correlated_data/processing_set.py>`_.
-    - ``n_datasets``: The number of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_ in the input data.
-    - ``dim_i``: The ith dimension name.
-    - ``n_dims``: The number of dimensions over which parallelism will occur.
-    - ``n_dim_i_chunks``: Number of chunks into which the dimension coordinate ``dim_i`` has been divided.
-    - ``n_nodes``: Number of nodes in the mapping stage of a Map Reduce graph.
-    - ``_{}``: If curly brackets are preceded by an underscore, it indicates a subscript and not a dictionary value.
-
-    .. _parallel coords:
-    The structure of the parallel coordinates::
-
-        parallel_coords = {
-            dim_0: {
-                'data': list/np.ndarray of Number,
-                'data_chunks': {
-                    0 : list/np.ndarray of Number,
-                    ⋮
-                    n_dim_0_chunks-1 : ...,
-                }
-                'data_chunk_edges': list/np.ndarray of Number,
-                'dims': (dim_0,),
-                'attrs': measure attribute,
-            }
-            ⋮
-            dim_(n_dims-1): ...
-        }
-
-    The ``dim_i`` dictionaries have keys with the following meanings:
-
-    - ``data``: An array containing all the coordinate values associated with that dimension. These values do not necessarily have to match the values in the coordinates of the input data (dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_ or `ProcessingSet <https://github.com/casangi/xradio/blob/main/src/xradio/correlated_data/processing_set.py>`_), as those are interpolated onto these values. The minimum and maximum values can be respectively larger or smaller than the values in the coordinates of individual `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_; this will simply exclude that data from being processed. It's important to note that the :ref:`parallel_coords <parallel coords>` and the input data coordinates must have the same measured attributes (reference frame, units, etc.).
-    - ``data_chunks``: A dictionary where the data is broken into chunks with integer keys. This chunking determines the parallelism of the graph. The values in the chunks can overlap.
-    - ``data_chunks_edges``: An array with the start and end values of each chunk.
-    - ``dims``: The dimension coordinate name.
-    - `attrs``: The `XRADIO measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ of the data.
-
-    .. _node task data mapping:
-    The node_task_data_mapping is a dictionary where each key is the node id of the nodes in the mapping stage of the graph and has the following structure::
-
-        node_task_data_mapping = {
-            0 : {
-                'chunk_indices': tuple of int,
-                'parallel_dims': (dim_0, ..., dim_{n_dims-1}),
-                'data_selection': {
-                        dataset_name_0: {
-                                dim_0: slice,
-                                ⋮
-                                dim_(n_dims-1): slice
-                        }
-                        ⋮
-                        dataset_name_{n_dataset-1}: ...
-                }
-                'task_coords':
-                    dim_0:{
-                        'data': list/np.ndarray of Number,
-                        'dims': str,
-                        'attrs': measure attribute,
-                    }
-                    ⋮
-                    dim_(n_dims-1): ...
-                }
-            ⋮
-            n_nodes-1 : ...
-        }
-
-    Each node id dictionary has the keys with the following meaning:
-
-    - ``chunk_indices``: The indices assigned to the data chunks in the :ref:`parallel_coords <parallel coords>`. There must be an index for each ``parallel_dims``.
-    - ``parallel_dims``: The dimension coordinates over which parallelism will occur.
-    - ``data_selection``: A dictionary where the keys are the names of the datasets in the `ProcessingSet <https://github.com/casangi/xradio/blob/main/src/xradio/correlated_data/processing_set.py>`_, and the values are dictionaries with the coordinates and accompanying slices. If a coordinate is not included, all values will be selected.
-    - ``task_coords``: The chunk of the parallel_coord that is assigned to this node.
-    """
-    # Nested Dict keys: xds_name, dim, chunk_index.
-
-    if ps_partition == None:
-        ps_partition = []
-    if ("spectral_window_name" in ps_partition) and ("frequency" in parallel_coords):
-        raise ValueError("Cannot split by both spw and frequency")
-
-    if len(ps_partition) > 0:
-        partition_map = _partition_ps_by_non_dimensions(input_data, ps_partition)
-    else:
-        # By default we iterate over everything
-        partition_map = {0: [xds_name for xds_name in input_data]}
-
-    xds_data_selection = {}
-
-    # Loop over every dataset and interpolate onto parallel_coords;
-    # The result of this loop is a filled-in xds_data_selection that maps each
-    # xds to a dictionary of mapping its dimensions to the range for each chunk
-    for partition in partition_map:
-        for xds_name in input_data:
-            for dim, pc in parallel_coords.items():
-
-                # Interpolate all the chunk edges. This is done for performance reasons.
-                if "data_chunks_edges" not in pc:
-                    pc["data_chunks_edges"] = _array_split_edges(pc["data_chunks"])
-
-                if input_data[xds_name][dim].dtype.kind in ("U", "S", "O"):
-                    # For string arrays, we perform exact matching only.
-                    # We map each string to its integer index.
-                    string_to_idx = {
-                        val: i for i, val in enumerate(input_data[xds_name][dim].values)
-                    }
-
-                    # Create a vectorized lookup function
-                    # Values not found in the input data return -1
-                    def string_interpolator(query_values, string_to_idx):
-                        return np.array(
-                            [string_to_idx.get(val, -1) for val in query_values]
-                        )
-
-                    interp_index = string_interpolator(
-                        pc["data_chunks_edges"], string_to_idx
-                    ).astype(int)
-                else:
-                    interpolator = interp1d(
-                        input_data[xds_name][dim].values,
-                        np.arange(len(input_data[xds_name][dim].values)),
-                        kind=interpolation_method,
-                        bounds_error=False,
-                        fill_value=-1,
-                        # fill_value="extrapolate",
-                        assume_sorted=assume_sorted,
-                    )
-                    interp_index = interpolator(pc["data_chunks_edges"]).astype(int)
-
-                chunk_indx_start_stop = {}
-                i = 0
-                # Split the interp_index for each chunk and fix any boundary issues.
-                for chunk_index in sorted(pc["data_chunks"].keys()):
-                    if interp_index[i] == -1 and interp_index[i + 1] == -1:
-                        chunk_indx_start_stop[chunk_index] = slice(None)
-                        if (
-                            pc["data_chunks_edges"][i] < input_data[xds_name][dim][0]
-                        ) and (
-                            pc["data_chunks_edges"][i + 1]
-                            > input_data[xds_name][dim][-1]
-                        ):
-                            interp_index[i] = 0
-                            interp_index[i + 1] = -2
-                            chunk_indx_start_stop[chunk_index] = slice(
-                                interp_index[i], interp_index[i + 1] + 1
-                            )
-                    else:
-                        if interp_index[i] == -1:
-                            interp_index[i] = 0
-                        if interp_index[i + 1] == -1:
-                            interp_index[i + 1] = -2
-                        chunk_indx_start_stop[chunk_index] = slice(
-                            interp_index[i], interp_index[i + 1] + 1
-                        )
-                    i = i + 2
-
-                xds_data_selection.setdefault(xds_name, {})[dim] = chunk_indx_start_stop
-
-    # To create the node_task_data_mapping we have to get the slices for each dimension on node task level.
-    # Using itertools we can get all the combinations of the chunk indices that belong to a given node:
-    node_task_data_mapping = (
-        {}
-    )  # Nested Dict keys: task_id, [data_selection,chunk_indices,parallel_dims], xds_name, dim.
-
-    # Loop over every task node (each task node has a unique task_id):
-
-    task_id = 0
-    for partition in partition_map.keys():
-        # We redo this for every partition, because task number will have changed
-        iter_chunks_indices, parallel_dims = _make_iter_chunks_indices(parallel_coords)
-        for chunk_indices in iter_chunks_indices:
-            logger.debug(f"chunk_index: {task_id}, {chunk_indices}")
-            node_task_data_mapping[task_id] = {}
-            node_task_data_mapping[task_id]["chunk_indices"] = chunk_indices
-            node_task_data_mapping[task_id]["parallel_dims"] = parallel_dims
-            node_task_data_mapping[task_id]["data_selection"] = {}
-
-            task_coords = {}
-            # For task_id get the task_coords from parallel_coords:
-            for i_dim, dim in enumerate(parallel_dims):
-                chunk_coords = {}
-                chunk_coords["data"] = parallel_coords[dim]["data_chunks"][
-                    chunk_indices[i_dim]
-                ]
-                chunk_coords["dims"] = parallel_coords[dim]["dims"]
-                chunk_coords["attrs"] = parallel_coords[dim]["attrs"]
-                if "data_chunk_slices" in parallel_coords[dim]:
-                    chunk_coords["slice"] = parallel_coords[dim]["data_chunk_slices"][
-                        chunk_indices[i_dim]
-                    ]
-                else:
-                    chunk_coords["slice"] = slice(None)
-                task_coords[dim] = chunk_coords
-
-            # breakpoint()
-            node_task_data_mapping[task_id]["task_coords"] = task_coords
-            partition_xds_names = partition_map[partition]
-            # For task_id get the selection slices for each dataset in the input data from xds_data_selection:
-            for xds_name in partition_xds_names:
-                node_task_data_mapping[task_id]["data_selection"][xds_name] = {}
-                empty_chunk = False
-                for i, chunk_index in enumerate(chunk_indices):
-                    if chunk_index in xds_data_selection[xds_name][parallel_dims[i]]:
-                        node_task_data_mapping[task_id]["data_selection"][xds_name][
-                            parallel_dims[i]
-                        ] = xds_data_selection[xds_name][parallel_dims[i]][chunk_index]
-
-                        if xds_data_selection[xds_name][parallel_dims[i]][
-                            chunk_index
-                        ] == slice(None):
-                            empty_chunk = True
-                    else:
-                        empty_chunk = True
-
-                #
-                if (
-                    empty_chunk
-                ):  # The xds with xds_name has no data for the parallel chunk (no slice on one of the dims).
-                    del node_task_data_mapping[task_id]["data_selection"][xds_name]
-            task_id += 1
-            # breakpoint()
-
-    return node_task_data_mapping
-
-
 def _array_split(data: Union[list, np.ndarray], n_chunks: int):
     """Takes an input array and splits it into n_chunk arrays which are stored in a dictionary with numbered keys.
 
@@ -670,12 +404,6 @@ def _partition_ps_by_non_dimensions(ps, ps_partition_keys):
 
     return d
 
-
-# ---------------------------------------------------------------------------
-# V2 — performance-optimised versions
-# ---------------------------------------------------------------------------
-
-
 def _nearest_interp_indices(
     coord_values: np.ndarray,
     query_values: np.ndarray,
@@ -726,7 +454,7 @@ def _nearest_interp_indices(
     return interp_index
 
 
-def interpolate_data_coords_onto_parallel_coords_v2(
+def interpolate_data_coords_onto_parallel_coords(
     parallel_coords: dict,
     input_data: Union[Dict, xr.DataTree],
     interpolation_method: {
@@ -743,27 +471,100 @@ def interpolate_data_coords_onto_parallel_coords_v2(
     assume_sorted: bool = True,
     ps_partition: Optional[list[str]] = None,
 ) -> Dict:
-    """Performance-optimised version of
-    :func:`interpolate_data_coords_onto_parallel_coords`.
+    """Interpolate data_coords onto parallel_coords to create the ``node_task_data_mapping``. For the case of string coordinates (for example antenna_name), only exact matching is performed.
 
-    Identical interface and output; key improvements over v1:
+    Parameters
+    ----------
+    parallel_coords : Dict
+        The parallel coordinates determine the parallelism of the map graph.
+        The keys in the parallel coordinates can by any combination of the dimension coordinates in the input data.
+        See notes in docstring for structure.
+    input_data : Union[Dict, ProcessingSet]
+        Can either be a `ProcessingSet <https://github.com/casangi/xradio/blob/main/src/xradio/correlated_data/processing_set.py>`_ or a Dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_. Only coordinates are needed so no actual data is loaded into memory.
+    interpolation_method :  {"linear", "nearest", "nearest-up", "zero", "slinear", "quadratic", "cubic", "previous", "next",}, optional
+        The kind of interpolation method to use as described in `Scipy documentation <https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interp1d.html>`_ , by default ``nearest``.
+    assume_sorted : bool, optional
+        Are the data in parallel_coords and input_data monotonically increasing in value, by default True.
+    ps_partition : An optional list of strings ('spectral_window_name' and/or 'field_name' are currently supported); if non-empty, the function will use the meta-data of each Dataset to partition the parallel sets by these pseudo-dimensions as well as the actual Dataset dimensions specified.
+    Returns
+    -------
+    Dict :
+         Node task data mapping dictionary. See :ref:`notes <node task data mapping>` for structure of dictionary.
 
-    1. **No ``interp1d`` construction per dataset** — the default
-       ``kind='nearest'`` path uses ``np.searchsorted`` via
-       :func:`_nearest_interp_indices` instead of building a scipy
-       interpolator object for every ``(xds_name, dim)`` pair.
-    2. **Single ``.values`` call per ``(xds_name, dim)``** — the coordinate
-       array is fetched once and reused, avoiding repeated xarray/zarr
-       attribute access and per-element xarray indexing inside the chunk loop.
-    3. **Per-dim pre-computation moved outside the xds loop** —
-       ``data_chunks_edges`` (as a numpy array) and ``sorted_chunk_keys`` are
-       computed once per ``dim``, not once per ``(partition, xds_name, dim)``.
-    4. **Redundant outer partition loop removed from Phase 1** — the original
-       code wrapped the xds interpolation loop inside ``for partition in
-       partition_map`` even though ``partition`` was never used there, causing
-       the work to be repeated ``n_partitions`` times.
-    5. **``logger.debug`` uses ``%s`` formatting** to avoid f-string
-       evaluation when debug logging is disabled.
+    Notes
+    -----
+    Nomenclature used:
+
+    - ``input data``: A dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_ or a `ProcessingSet <https://github.com/casangi/xradio/blob/main/src/xradio/correlated_data/processing_set.py>`_.
+    - ``n_datasets``: The number of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_ in the input data.
+    - ``dim_i``: The ith dimension name.
+    - ``n_dims``: The number of dimensions over which parallelism will occur.
+    - ``n_dim_i_chunks``: Number of chunks into which the dimension coordinate ``dim_i`` has been divided.
+    - ``n_nodes``: Number of nodes in the mapping stage of a Map Reduce graph.
+    - ``_{}``: If curly brackets are preceded by an underscore, it indicates a subscript and not a dictionary value.
+
+    .. _parallel coords:
+    The structure of the parallel coordinates::
+
+        parallel_coords = {
+            dim_0: {
+                'data': list/np.ndarray of Number,
+                'data_chunks': {
+                    0 : list/np.ndarray of Number,
+                    ⋮
+                    n_dim_0_chunks-1 : ...,
+                }
+                'data_chunk_edges': list/np.ndarray of Number,
+                'dims': (dim_0,),
+                'attrs': measure attribute,
+            }
+            ⋮
+            dim_(n_dims-1): ...
+        }
+
+    The ``dim_i`` dictionaries have keys with the following meanings:
+
+    - ``data``: An array containing all the coordinate values associated with that dimension. These values do not necessarily have to match the values in the coordinates of the input data (dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_ or `ProcessingSet <https://github.com/casangi/xradio/blob/main/src/xradio/correlated_data/processing_set.py>`_), as those are interpolated onto these values. The minimum and maximum values can be respectively larger or smaller than the values in the coordinates of individual `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_; this will simply exclude that data from being processed. It's important to note that the :ref:`parallel_coords <parallel coords>` and the input data coordinates must have the same measured attributes (reference frame, units, etc.).
+    - ``data_chunks``: A dictionary where the data is broken into chunks with integer keys. This chunking determines the parallelism of the graph. The values in the chunks can overlap.
+    - ``data_chunks_edges``: An array with the start and end values of each chunk.
+    - ``dims``: The dimension coordinate name.
+    - `attrs``: The `XRADIO measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ of the data.
+
+    .. _node task data mapping:
+    The node_task_data_mapping is a dictionary where each key is the node id of the nodes in the mapping stage of the graph and has the following structure::
+
+        node_task_data_mapping = {
+            0 : {
+                'chunk_indices': tuple of int,
+                'parallel_dims': (dim_0, ..., dim_{n_dims-1}),
+                'data_selection': {
+                        dataset_name_0: {
+                                dim_0: slice,
+                                ⋮
+                                dim_(n_dims-1): slice
+                        }
+                        ⋮
+                        dataset_name_{n_dataset-1}: ...
+                }
+                'task_coords':
+                    dim_0:{
+                        'data': list/np.ndarray of Number,
+                        'dims': str,
+                        'attrs': measure attribute,
+                    }
+                    ⋮
+                    dim_(n_dims-1): ...
+                }
+            ⋮
+            n_nodes-1 : ...
+        }
+
+    Each node id dictionary has the keys with the following meaning:
+
+    - ``chunk_indices``: The indices assigned to the data chunks in the :ref:`parallel_coords <parallel coords>`. There must be an index for each ``parallel_dims``.
+    - ``parallel_dims``: The dimension coordinates over which parallelism will occur.
+    - ``data_selection``: A dictionary where the keys are the names of the datasets in the `ProcessingSet <https://github.com/casangi/xradio/blob/main/src/xradio/correlated_data/processing_set.py>`_, and the values are dictionaries with the coordinates and accompanying slices. If a coordinate is not included, all values will be selected.
+    - ``task_coords``: The chunk of the parallel_coord that is assigned to this node.
     """
     if ps_partition is None:
         ps_partition = []
@@ -802,9 +603,7 @@ def interpolate_data_coords_onto_parallel_coords_v2(
 
             if coord_values.dtype.kind in ("U", "S", "O"):
                 # String coordinates: exact matching only
-                string_to_idx = {
-                    val: i for i, val in enumerate(coord_values)
-                }
+                string_to_idx = {val: i for i, val in enumerate(coord_values)}
                 interp_index = np.array(
                     [string_to_idx.get(val, -1) for val in edges]
                 ).astype(int)
@@ -892,7 +691,9 @@ def interpolate_data_coords_onto_parallel_coords_v2(
                 empty_chunk = False
                 for i, chunk_index in enumerate(chunk_indices):
                     if chunk_index in xds_data_selection[xds_name][parallel_dims[i]]:
-                        sel = xds_data_selection[xds_name][parallel_dims[i]][chunk_index]
+                        sel = xds_data_selection[xds_name][parallel_dims[i]][
+                            chunk_index
+                        ]
                         node_task_data_mapping[task_id]["data_selection"][xds_name][
                             parallel_dims[i]
                         ] = sel
@@ -906,3 +707,268 @@ def interpolate_data_coords_onto_parallel_coords_v2(
             task_id += 1
 
     return node_task_data_mapping
+
+
+# def interpolate_data_coords_onto_parallel_coords(
+#     parallel_coords: dict,
+#     input_data: Union[Dict, xr.DataTree],
+#     interpolation_method: {
+#         "linear",
+#         "nearest",
+#         "nearest-up",
+#         "zero",
+#         "slinear",
+#         "quadratic",
+#         "cubic",
+#         "previous",
+#         "next",
+#     } = "nearest",
+#     assume_sorted: bool = True,
+#     ps_partition: Optional[
+#         list[str]
+#     ] = None,  # Current options are {'field_name', 'spectral_window_name'}
+# ) -> Dict:
+#     """Interpolate data_coords onto parallel_coords to create the ``node_task_data_mapping``. For the case of string coordinates (for example antenna_name), only exact matching is performed.
+
+#     Parameters
+#     ----------
+#     parallel_coords : Dict
+#         The parallel coordinates determine the parallelism of the map graph.
+#         The keys in the parallel coordinates can by any combination of the dimension coordinates in the input data.
+#         See notes in docstring for structure.
+#     input_data : Union[Dict, ProcessingSet]
+#         Can either be a `ProcessingSet <https://github.com/casangi/xradio/blob/main/src/xradio/correlated_data/processing_set.py>`_ or a Dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_. Only coordinates are needed so no actual data is loaded into memory.
+#     interpolation_method :  {"linear", "nearest", "nearest-up", "zero", "slinear", "quadratic", "cubic", "previous", "next",}, optional
+#         The kind of interpolation method to use as described in `Scipy documentation <https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interp1d.html>`_ , by default ``nearest``.
+#     assume_sorted : bool, optional
+#         Are the data in parallel_coords and input_data monotonically increasing in value, by default True.
+#     ps_partition : An optional list of strings ('spectral_window_name' and/or 'field_name' are currently supported); if non-empty, the function will use the meta-data of each Dataset to partition the parallel sets by these pseudo-dimensions as well as the actual Dataset dimensions specified.
+#     Returns
+#     -------
+#     Dict :
+#          Node task data mapping dictionary. See :ref:`notes <node task data mapping>` for structure of dictionary.
+
+#     Notes
+#     -----
+#     Nomenclature used:
+
+#     - ``input data``: A dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_ or a `ProcessingSet <https://github.com/casangi/xradio/blob/main/src/xradio/correlated_data/processing_set.py>`_.
+#     - ``n_datasets``: The number of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_ in the input data.
+#     - ``dim_i``: The ith dimension name.
+#     - ``n_dims``: The number of dimensions over which parallelism will occur.
+#     - ``n_dim_i_chunks``: Number of chunks into which the dimension coordinate ``dim_i`` has been divided.
+#     - ``n_nodes``: Number of nodes in the mapping stage of a Map Reduce graph.
+#     - ``_{}``: If curly brackets are preceded by an underscore, it indicates a subscript and not a dictionary value.
+
+#     .. _parallel coords:
+#     The structure of the parallel coordinates::
+
+#         parallel_coords = {
+#             dim_0: {
+#                 'data': list/np.ndarray of Number,
+#                 'data_chunks': {
+#                     0 : list/np.ndarray of Number,
+#                     ⋮
+#                     n_dim_0_chunks-1 : ...,
+#                 }
+#                 'data_chunk_edges': list/np.ndarray of Number,
+#                 'dims': (dim_0,),
+#                 'attrs': measure attribute,
+#             }
+#             ⋮
+#             dim_(n_dims-1): ...
+#         }
+
+#     The ``dim_i`` dictionaries have keys with the following meanings:
+
+#     - ``data``: An array containing all the coordinate values associated with that dimension. These values do not necessarily have to match the values in the coordinates of the input data (dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_ or `ProcessingSet <https://github.com/casangi/xradio/blob/main/src/xradio/correlated_data/processing_set.py>`_), as those are interpolated onto these values. The minimum and maximum values can be respectively larger or smaller than the values in the coordinates of individual `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_; this will simply exclude that data from being processed. It's important to note that the :ref:`parallel_coords <parallel coords>` and the input data coordinates must have the same measured attributes (reference frame, units, etc.).
+#     - ``data_chunks``: A dictionary where the data is broken into chunks with integer keys. This chunking determines the parallelism of the graph. The values in the chunks can overlap.
+#     - ``data_chunks_edges``: An array with the start and end values of each chunk.
+#     - ``dims``: The dimension coordinate name.
+#     - `attrs``: The `XRADIO measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ of the data.
+
+#     .. _node task data mapping:
+#     The node_task_data_mapping is a dictionary where each key is the node id of the nodes in the mapping stage of the graph and has the following structure::
+
+#         node_task_data_mapping = {
+#             0 : {
+#                 'chunk_indices': tuple of int,
+#                 'parallel_dims': (dim_0, ..., dim_{n_dims-1}),
+#                 'data_selection': {
+#                         dataset_name_0: {
+#                                 dim_0: slice,
+#                                 ⋮
+#                                 dim_(n_dims-1): slice
+#                         }
+#                         ⋮
+#                         dataset_name_{n_dataset-1}: ...
+#                 }
+#                 'task_coords':
+#                     dim_0:{
+#                         'data': list/np.ndarray of Number,
+#                         'dims': str,
+#                         'attrs': measure attribute,
+#                     }
+#                     ⋮
+#                     dim_(n_dims-1): ...
+#                 }
+#             ⋮
+#             n_nodes-1 : ...
+#         }
+
+#     Each node id dictionary has the keys with the following meaning:
+
+#     - ``chunk_indices``: The indices assigned to the data chunks in the :ref:`parallel_coords <parallel coords>`. There must be an index for each ``parallel_dims``.
+#     - ``parallel_dims``: The dimension coordinates over which parallelism will occur.
+#     - ``data_selection``: A dictionary where the keys are the names of the datasets in the `ProcessingSet <https://github.com/casangi/xradio/blob/main/src/xradio/correlated_data/processing_set.py>`_, and the values are dictionaries with the coordinates and accompanying slices. If a coordinate is not included, all values will be selected.
+#     - ``task_coords``: The chunk of the parallel_coord that is assigned to this node.
+#     """
+#     # Nested Dict keys: xds_name, dim, chunk_index.
+
+#     if ps_partition == None:
+#         ps_partition = []
+#     if ("spectral_window_name" in ps_partition) and ("frequency" in parallel_coords):
+#         raise ValueError("Cannot split by both spw and frequency")
+
+#     if len(ps_partition) > 0:
+#         partition_map = _partition_ps_by_non_dimensions(input_data, ps_partition)
+#     else:
+#         # By default we iterate over everything
+#         partition_map = {0: [xds_name for xds_name in input_data]}
+
+#     xds_data_selection = {}
+
+#     # Loop over every dataset and interpolate onto parallel_coords;
+#     # The result of this loop is a filled-in xds_data_selection that maps each
+#     # xds to a dictionary of mapping its dimensions to the range for each chunk
+#     for partition in partition_map:
+#         for xds_name in input_data:
+#             for dim, pc in parallel_coords.items():
+
+#                 # Interpolate all the chunk edges. This is done for performance reasons.
+#                 if "data_chunks_edges" not in pc:
+#                     pc["data_chunks_edges"] = _array_split_edges(pc["data_chunks"])
+
+#                 if input_data[xds_name][dim].dtype.kind in ("U", "S", "O"):
+#                     # For string arrays, we perform exact matching only.
+#                     # We map each string to its integer index.
+#                     string_to_idx = {
+#                         val: i for i, val in enumerate(input_data[xds_name][dim].values)
+#                     }
+
+#                     # Create a vectorized lookup function
+#                     # Values not found in the input data return -1
+#                     def string_interpolator(query_values, string_to_idx):
+#                         return np.array(
+#                             [string_to_idx.get(val, -1) for val in query_values]
+#                         )
+
+#                     interp_index = string_interpolator(
+#                         pc["data_chunks_edges"], string_to_idx
+#                     ).astype(int)
+#                 else:
+#                     interpolator = interp1d(
+#                         input_data[xds_name][dim].values,
+#                         np.arange(len(input_data[xds_name][dim].values)),
+#                         kind=interpolation_method,
+#                         bounds_error=False,
+#                         fill_value=-1,
+#                         # fill_value="extrapolate",
+#                         assume_sorted=assume_sorted,
+#                     )
+#                     interp_index = interpolator(pc["data_chunks_edges"]).astype(int)
+
+#                 chunk_indx_start_stop = {}
+#                 i = 0
+#                 # Split the interp_index for each chunk and fix any boundary issues.
+#                 for chunk_index in sorted(pc["data_chunks"].keys()):
+#                     if interp_index[i] == -1 and interp_index[i + 1] == -1:
+#                         chunk_indx_start_stop[chunk_index] = slice(None)
+#                         if (
+#                             pc["data_chunks_edges"][i] < input_data[xds_name][dim][0]
+#                         ) and (
+#                             pc["data_chunks_edges"][i + 1]
+#                             > input_data[xds_name][dim][-1]
+#                         ):
+#                             interp_index[i] = 0
+#                             interp_index[i + 1] = -2
+#                             chunk_indx_start_stop[chunk_index] = slice(
+#                                 interp_index[i], interp_index[i + 1] + 1
+#                             )
+#                     else:
+#                         if interp_index[i] == -1:
+#                             interp_index[i] = 0
+#                         if interp_index[i + 1] == -1:
+#                             interp_index[i + 1] = -2
+#                         chunk_indx_start_stop[chunk_index] = slice(
+#                             interp_index[i], interp_index[i + 1] + 1
+#                         )
+#                     i = i + 2
+
+#                 xds_data_selection.setdefault(xds_name, {})[dim] = chunk_indx_start_stop
+
+#     # To create the node_task_data_mapping we have to get the slices for each dimension on node task level.
+#     # Using itertools we can get all the combinations of the chunk indices that belong to a given node:
+#     node_task_data_mapping = (
+#         {}
+#     )  # Nested Dict keys: task_id, [data_selection,chunk_indices,parallel_dims], xds_name, dim.
+
+#     # Loop over every task node (each task node has a unique task_id):
+
+#     task_id = 0
+#     for partition in partition_map.keys():
+#         # We redo this for every partition, because task number will have changed
+#         iter_chunks_indices, parallel_dims = _make_iter_chunks_indices(parallel_coords)
+#         for chunk_indices in iter_chunks_indices:
+#             logger.debug(f"chunk_index: {task_id}, {chunk_indices}")
+#             node_task_data_mapping[task_id] = {}
+#             node_task_data_mapping[task_id]["chunk_indices"] = chunk_indices
+#             node_task_data_mapping[task_id]["parallel_dims"] = parallel_dims
+#             node_task_data_mapping[task_id]["data_selection"] = {}
+
+#             task_coords = {}
+#             # For task_id get the task_coords from parallel_coords:
+#             for i_dim, dim in enumerate(parallel_dims):
+#                 chunk_coords = {}
+#                 chunk_coords["data"] = parallel_coords[dim]["data_chunks"][
+#                     chunk_indices[i_dim]
+#                 ]
+#                 chunk_coords["dims"] = parallel_coords[dim]["dims"]
+#                 chunk_coords["attrs"] = parallel_coords[dim]["attrs"]
+#                 if "data_chunk_slices" in parallel_coords[dim]:
+#                     chunk_coords["slice"] = parallel_coords[dim]["data_chunk_slices"][
+#                         chunk_indices[i_dim]
+#                     ]
+#                 else:
+#                     chunk_coords["slice"] = slice(None)
+#                 task_coords[dim] = chunk_coords
+
+#             # breakpoint()
+#             node_task_data_mapping[task_id]["task_coords"] = task_coords
+#             partition_xds_names = partition_map[partition]
+#             # For task_id get the selection slices for each dataset in the input data from xds_data_selection:
+#             for xds_name in partition_xds_names:
+#                 node_task_data_mapping[task_id]["data_selection"][xds_name] = {}
+#                 empty_chunk = False
+#                 for i, chunk_index in enumerate(chunk_indices):
+#                     if chunk_index in xds_data_selection[xds_name][parallel_dims[i]]:
+#                         node_task_data_mapping[task_id]["data_selection"][xds_name][
+#                             parallel_dims[i]
+#                         ] = xds_data_selection[xds_name][parallel_dims[i]][chunk_index]
+
+#                         if xds_data_selection[xds_name][parallel_dims[i]][
+#                             chunk_index
+#                         ] == slice(None):
+#                             empty_chunk = True
+#                     else:
+#                         empty_chunk = True
+
+#                 #
+#                 if (
+#                     empty_chunk
+#                 ):  # The xds with xds_name has no data for the parallel chunk (no slice on one of the dims).
+#                     del node_task_data_mapping[task_id]["data_selection"][xds_name]
+#             task_id += 1
+#             # breakpoint()
+
+#     return node_task_data_mapping
