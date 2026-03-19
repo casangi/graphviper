@@ -257,6 +257,7 @@ def make_parallel_coord_by_gap(coord: Union[Dict, xr.DataArray], gap: float) -> 
         parallel_coord["attrs"] = coord["attrs"]
     return parallel_coord
 
+
 def _array_split(data: Union[list, np.ndarray], n_chunks: int):
     """Takes an input array and splits it into n_chunk arrays which are stored in a dictionary with numbered keys.
 
@@ -403,6 +404,7 @@ def _partition_ps_by_non_dimensions(ps, ps_partition_keys):
         d[multi_index] = set.intersection(*sets)
 
     return d
+
 
 def _nearest_interp_indices(
     coord_values: np.ndarray,
