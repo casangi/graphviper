@@ -20,6 +20,9 @@ def map(
     in_memory_compute: bool = False,
     client=None,
     date_time: str = None,
+    data_loading_task: Union[Callable[..., Any], None] = None,
+    disk_chunk_sizes: Union[Dict[str, int], None] = None,
+    load_node_input_params: Union[dict, None] = None,
 ) -> Dict:
     """Create a perfectly parallel graph where a node is generated for each item in the :ref:`node_task_data_mapping <node task data mapping>` using the function specified in the ``node_task`` parameter.
 
@@ -116,7 +119,142 @@ def map(
 
     graph = {"map": {"node_task": node_task, "input_params": input_param_list}}
 
+    if data_loading_task is not None and disk_chunk_sizes is not None:
+        if load_node_input_params is None:
+            load_node_input_params = {}
+        load_input_params_list, load_node_ids, relative_data_selections = (
+            _build_load_stage(input_param_list, disk_chunk_sizes, load_node_input_params)
+        )
+        graph["load"] = {
+            "node_task": data_loading_task,
+            "input_params": load_input_params_list,
+        }
+        graph["map"]["load_node_ids"] = load_node_ids
+        graph["map"]["relative_data_selections"] = relative_data_selections
+
     return graph
+
+
+def _build_load_stage(
+    input_param_list: list,
+    disk_chunk_sizes: Dict[str, int],
+    load_node_input_params: dict,
+):
+    """Groups mapping tasks by their native on-disk chunk and builds load node parameters.
+
+    For each parallel dimension listed in ``disk_chunk_sizes`` the mapping tasks are
+    grouped by the disk chunk they fall in.  Tasks that span a chunk boundary, or have
+    no disk-chunked dimension selections, are excluded from the load layer
+    (``load_node_id == -1``) and will fall back to the normal per-task data loading.
+
+    Parameters
+    ----------
+    input_param_list : list of dict
+        Per-task parameter dicts produced by :func:`map`.  Each dict must contain
+        ``"input_data_store"`` and ``"data_selection"``.
+    disk_chunk_sizes : dict
+        ``{dim: native_chunk_size}`` for every parallel dimension whose on-disk
+        chunking should be used to coalesce I/O.
+    load_node_input_params : dict
+        Extra parameters merged into every load node parameter dict
+        (e.g. ``processing_set_data_group_name``).
+
+    Returns
+    -------
+    load_input_params_list : list of dict
+        One parameter dict per unique disk-chunk group (= one load node).
+        Each dict contains ``"input_data_store"``, ``"data_selection"`` (at the
+        disk-chunk granularity), and any entries from ``load_node_input_params``.
+    load_node_ids : list of int
+        Index into ``load_input_params_list`` for each mapping task, or ``-1`` when
+        no load node applies to that task.
+    relative_data_selections : list of dict or None
+        Per-task data selection expressed as indices *relative to the start of the
+        pre-loaded disk chunk*, or ``None`` when ``load_node_id == -1``.
+    """
+    disk_chunk_group_to_id: Dict = {}
+    load_input_params_list: list = []
+    load_node_ids: list = []
+    relative_data_selections: list = []
+
+    for task_params in input_param_list:
+        data_selection = task_params.get("data_selection", {})
+
+        group_key_parts = []
+        disk_level_selection: Dict = {}
+        relative_sel: Dict = {}
+        skip = False
+
+        for xds_name, xds_sel in data_selection.items():
+            disk_level_selection[xds_name] = {}
+            relative_sel[xds_name] = {}
+
+            for dim, sel in xds_sel.items():
+                if (
+                    dim in disk_chunk_sizes
+                    and isinstance(sel, slice)
+                    and sel.start is not None
+                    and sel.stop is not None
+                    and sel.start >= 0
+                    and sel.stop >= 0
+                ):
+                    chunk_size = disk_chunk_sizes[dim]
+                    abs_start = sel.start
+                    abs_stop = sel.stop
+
+                    start_disk_chunk = abs_start // chunk_size
+                    # abs_stop is exclusive, so the last included index is abs_stop - 1
+                    end_disk_chunk = max(0, abs_stop - 1) // chunk_size
+
+                    if start_disk_chunk != end_disk_chunk:
+                        # Task spans a disk chunk boundary — skip the optimization.
+                        logger.debug(
+                            f"Load layer: task spans disk chunk boundary for dim '{dim}' "
+                            f"(sel={sel}, chunk_size={chunk_size}); falling back to per-task loading."
+                        )
+                        skip = True
+                        break
+
+                    disk_start = start_disk_chunk * chunk_size
+                    disk_stop = disk_start + chunk_size
+
+                    disk_level_selection[xds_name][dim] = slice(disk_start, disk_stop)
+                    relative_sel[xds_name][dim] = slice(
+                        abs_start - disk_start,
+                        abs_stop - disk_start,
+                    )
+                    group_key_parts.append((xds_name, dim, start_disk_chunk))
+                else:
+                    # Dim not disk-chunked: load node loads everything; the
+                    # original absolute slice is still valid relative to the
+                    # loaded data (which starts at index 0 for this dim).
+                    disk_level_selection[xds_name][dim] = slice(None)
+                    relative_sel[xds_name][dim] = sel
+
+            if skip:
+                break
+
+        if skip or not group_key_parts:
+            load_node_ids.append(-1)
+            relative_data_selections.append(None)
+            continue
+
+        group_key = frozenset(group_key_parts)
+
+        if group_key not in disk_chunk_group_to_id:
+            new_id = len(load_input_params_list)
+            disk_chunk_group_to_id[group_key] = new_id
+            load_params: Dict = {
+                "input_data_store": task_params["input_data_store"],
+                "data_selection": disk_level_selection,
+            }
+            load_params.update(load_node_input_params)
+            load_input_params_list.append(load_params)
+
+        load_node_ids.append(disk_chunk_group_to_id[group_key])
+        relative_data_selections.append(relative_sel)
+
+    return load_input_params_list, load_node_ids, relative_data_selections
 
 
 def _select_data(input_data, data_selection):

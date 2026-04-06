@@ -3,6 +3,7 @@ from .coordinate_utils import (
     make_frequency_coord,
     make_parallel_coord,
     interpolate_data_coords_onto_parallel_coords,
+    get_disk_chunk_sizes,
 )
 from .map import map
 from .reduce import reduce

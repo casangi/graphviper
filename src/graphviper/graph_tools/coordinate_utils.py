@@ -711,6 +711,97 @@ def interpolate_data_coords_onto_parallel_coords(
     return node_task_data_mapping
 
 
+def get_disk_chunk_sizes(
+    input_data: Union[Dict, xr.DataTree],
+    parallel_coords: Dict,
+) -> Dict[str, int]:
+    """Determine the native on-disk chunk size for each parallel coordinate dimension.
+
+    When a Zarr store is opened with ``xarray`` using a dask backend
+    (``chunks={}``), the resulting dask arrays carry the native zarr chunk sizes.
+    This function reads those chunk sizes from the coordinate arrays so that the
+    caller can pass them as ``disk_chunk_sizes`` to
+    :func:`graphviper.graph_tools.map.map`, enabling the data loading layer to
+    coalesce I/O at disk-chunk granularity.
+
+    Only the dimensions listed in *parallel_coords* are inspected; non-parallel
+    dimensions are ignored.
+
+    Parameters
+    ----------
+    input_data : Union[Dict, xr.DataTree]
+        The opened processing set — either an ``xr.DataTree`` or a plain dict of
+        ``xr.Dataset``.  The datasets must have been opened with a dask backend
+        (``chunks={}`` or equivalent) so that their coordinates are backed by
+        dask arrays with chunk information.  If a coordinate is numpy-backed (no
+        chunk information), the full coordinate length is used as the chunk size,
+        which is equivalent to treating the entire axis as a single disk chunk.
+    parallel_coords : Dict
+        The parallel coordinates dict as produced by :func:`make_parallel_coord`.
+        Only the keys (dimension names) are used.
+
+    Returns
+    -------
+    Dict[str, int]
+        ``{dim: native_chunk_size}`` for every dimension in *parallel_coords*
+        that is found in at least one dataset.  The returned chunk size is the
+        **minimum first-chunk size** observed across all datasets, which is the
+        conservative choice when datasets in the same processing set have
+        different on-disk chunking for the same dimension.
+
+    Notes
+    -----
+    Zarr stores the chunk size uniformly except for the last chunk, which may be
+    smaller if the array length is not a multiple of the chunk size.  This
+    function always reads the *first* chunk size (index 0) to get the nominal
+    chunk size and ignores the trailing remainder chunk.
+
+    Examples
+    --------
+    >>> ps_xdt = open_processing_set(ps_store)
+    >>> parallel_coords = {"frequency": make_parallel_coord(coord=img_xds.frequency, n_chunks=n_chunks)}
+    >>> disk_chunk_sizes = get_disk_chunk_sizes(ps_xdt, parallel_coords)
+    >>> # e.g. {"frequency": 200}
+    >>> viper_graph = map(..., disk_chunk_sizes=disk_chunk_sizes)
+    """
+    disk_chunk_sizes: Dict[str, int] = {}
+
+    for dim in parallel_coords:
+        min_chunk_size: Optional[int] = None
+
+        for xds_name, xds in input_data.items():
+            # DataTree nodes expose their dataset via .ds; plain dicts yield
+            # the dataset directly.
+            ds = xds.ds if isinstance(xds, xr.DataTree) else xds
+
+            if dim not in ds.coords:
+                continue
+
+            coord_array = ds[dim]
+            coord_data = coord_array.data  # dask array or numpy array
+
+            if hasattr(coord_data, "chunks") and coord_data.chunks:
+                # Dask array: chunks is a tuple-of-tuples, one tuple per axis.
+                # For a 1-D coordinate there is exactly one axis (index 0).
+                first_chunk = int(coord_data.chunks[0][0])
+            else:
+                # Numpy-backed (no dask): treat the whole axis as one chunk.
+                first_chunk = int(coord_array.size)
+
+            if min_chunk_size is None or first_chunk < min_chunk_size:
+                min_chunk_size = first_chunk
+
+        if min_chunk_size is not None:
+            disk_chunk_sizes[dim] = min_chunk_size
+        else:
+            logger.warning(
+                f"get_disk_chunk_sizes: dimension '{dim}' not found in any dataset; "
+                "skipping."
+            )
+
+    return disk_chunk_sizes
+
+
 # def interpolate_data_coords_onto_parallel_coords(
 #     parallel_coords: dict,
 #     input_data: Union[Dict, xr.DataTree],
