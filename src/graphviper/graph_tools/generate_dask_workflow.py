@@ -69,72 +69,72 @@ def _prepare_task_input(loaded_data, relative_data_selection, input_params):
 
 
 def generate_dask_workflow(viper_graph):
+    with dask.annotate(resources={"slots": 1}):
+        dask_graph = []
 
-    dask_graph = []
+        if "load" in viper_graph:
+            # ------------------------------------------------------------------
+            # Build load nodes — one dask.delayed per unique disk-chunk group.
+            # Dask will compute each load node once even when multiple map nodes
+            # depend on it, avoiding redundant disk reads.
+            #
+            # Each load node and the prepare/map tasks it feeds are annotated
+            # with ``viper_load_group`` and ``viper_map_pair`` so that the
+            # ViperGraphPlugin scheduler plugin can assign priorities that
+            # (a) minimise the number of concurrently-loaded disk chunks and
+            # (b) schedule reduction-adjacent task pairs together.
+            # ------------------------------------------------------------------
+            load_fn = viper_graph["load"]["node_task"]
+            load_nodes = []
+            for load_id, lp in enumerate(viper_graph["load"]["input_params"]):
+                delayed_lp = dask.delayed(lp)
+                with dask.annotate(viper_load_group=load_id):
+                    load_nodes.append(dask.delayed(load_fn)(delayed_lp))
 
-    if "load" in viper_graph:
-        # ------------------------------------------------------------------
-        # Build load nodes — one dask.delayed per unique disk-chunk group.
-        # Dask will compute each load node once even when multiple map nodes
-        # depend on it, avoiding redundant disk reads.
-        #
-        # Each load node and the prepare/map tasks it feeds are annotated
-        # with ``viper_load_group`` and ``viper_map_pair`` so that the
-        # ViperGraphPlugin scheduler plugin can assign priorities that
-        # (a) minimise the number of concurrently-loaded disk chunks and
-        # (b) schedule reduction-adjacent task pairs together.
-        # ------------------------------------------------------------------
-        load_fn = viper_graph["load"]["node_task"]
-        load_nodes = []
-        for load_id, lp in enumerate(viper_graph["load"]["input_params"]):
-            delayed_lp = dask.delayed(lp)
-            with dask.annotate(viper_load_group=load_id):
-                load_nodes.append(dask.delayed(load_fn)(delayed_lp))
+            load_node_ids = viper_graph["map"]["load_node_ids"]
+            relative_data_selections = viper_graph["map"]["relative_data_selections"]
+            map_fn = viper_graph["map"]["node_task"]
 
-        load_node_ids = viper_graph["map"]["load_node_ids"]
-        relative_data_selections = viper_graph["map"]["relative_data_selections"]
-        map_fn = viper_graph["map"]["node_task"]
+            # Count tasks per load group so pair_id can be computed incrementally.
+            group_task_counter: dict = defaultdict(int)
 
-        # Count tasks per load group so pair_id can be computed incrementally.
-        group_task_counter: dict = defaultdict(int)
+            for i, input_params in enumerate(viper_graph["map"]["input_params"]):
+                load_node_id = load_node_ids[i]
+                delayed_params = dask.delayed(input_params)
+                if load_node_id == -1:
+                    # No load node for this task — fall back to per-task loading.
+                    dask_graph.append(dask.delayed(map_fn)(delayed_params))
+                else:
+                    load_node = load_nodes[load_node_id]
+                    rel_sel = relative_data_selections[i]
+                    # pair_id groups consecutive tasks within the same load group
+                    # into the pairs that will be combined at the first level of
+                    # the binary tree reduction.
+                    pair_id = group_task_counter[load_node_id] // 2
+                    group_task_counter[load_node_id] += 1
+                    with dask.annotate(viper_load_group=load_node_id, viper_map_pair=pair_id):
+                        task_input = dask.delayed(_prepare_task_input)(
+                            load_node, rel_sel, delayed_params
+                        )
+                        dask_graph.append(dask.delayed(map_fn)(task_input))
+        else:
+            for input_params in viper_graph["map"]["input_params"]:
+                dask_graph.append(
+                    dask.delayed(viper_graph["map"]["node_task"])(dask.delayed(input_params))
+                )
 
-        for i, input_params in enumerate(viper_graph["map"]["input_params"]):
-            load_node_id = load_node_ids[i]
-            delayed_params = dask.delayed(input_params)
-            if load_node_id == -1:
-                # No load node for this task — fall back to per-task loading.
-                dask_graph.append(dask.delayed(map_fn)(delayed_params))
-            else:
-                load_node = load_nodes[load_node_id]
-                rel_sel = relative_data_selections[i]
-                # pair_id groups consecutive tasks within the same load group
-                # into the pairs that will be combined at the first level of
-                # the binary tree reduction.
-                pair_id = group_task_counter[load_node_id] // 2
-                group_task_counter[load_node_id] += 1
-                with dask.annotate(viper_load_group=load_node_id, viper_map_pair=pair_id):
-                    task_input = dask.delayed(_prepare_task_input)(
-                        load_node, rel_sel, delayed_params
-                    )
-                    dask_graph.append(dask.delayed(map_fn)(task_input))
-    else:
-        for input_params in viper_graph["map"]["input_params"]:
-            dask_graph.append(
-                dask.delayed(viper_graph["map"]["node_task"])(dask.delayed(input_params))
-            )
+        if "reduce" in viper_graph:
+            if viper_graph["reduce"]["mode"] == "tree":
+                dask_graph = _tree_combine(
+                    dask_graph,
+                    viper_graph["reduce"]["node_task"],
+                    viper_graph["reduce"]["input_params"],
+                )
+            elif viper_graph["reduce"]["mode"] == "single_node":
+                dask_graph = _single_node(
+                    dask_graph,
+                    viper_graph["reduce"]["node_task"],
+                    viper_graph["reduce"]["input_params"],
+                )
 
-    if "reduce" in viper_graph:
-        if viper_graph["reduce"]["mode"] == "tree":
-            dask_graph = _tree_combine(
-                dask_graph,
-                viper_graph["reduce"]["node_task"],
-                viper_graph["reduce"]["input_params"],
-            )
-        elif viper_graph["reduce"]["mode"] == "single_node":
-            dask_graph = _single_node(
-                dask_graph,
-                viper_graph["reduce"]["node_task"],
-                viper_graph["reduce"]["input_params"],
-            )
-
-    return dask_graph
+        return dask_graph
