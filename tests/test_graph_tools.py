@@ -214,10 +214,18 @@ def test_build_load_stage():
     assert load_params_list[1]["data_selection"]["xds_0"]["frequency"] == slice(5, 10)
 
     # Relative selections are expressed relative to the disk chunk start
-    assert relative_sels[0]["xds_0"]["frequency"] == slice(0, 1)  # abs 0→1, disk_start 0
-    assert relative_sels[4]["xds_0"]["frequency"] == slice(4, 5)  # abs 4→5, disk_start 0
-    assert relative_sels[5]["xds_0"]["frequency"] == slice(0, 1)  # abs 5→6, disk_start 5
-    assert relative_sels[9]["xds_0"]["frequency"] == slice(4, 5)  # abs 9→10, disk_start 5
+    assert relative_sels[0]["xds_0"]["frequency"] == slice(
+        0, 1
+    )  # abs 0→1, disk_start 0
+    assert relative_sels[4]["xds_0"]["frequency"] == slice(
+        4, 5
+    )  # abs 4→5, disk_start 0
+    assert relative_sels[5]["xds_0"]["frequency"] == slice(
+        0, 1
+    )  # abs 5→6, disk_start 5
+    assert relative_sels[9]["xds_0"]["frequency"] == slice(
+        4, 5
+    )  # abs 9→10, disk_start 5
 
 
 def test_build_load_stage_boundary():
@@ -243,9 +251,9 @@ def test_build_load_stage_boundary():
         load_node_input_params={},
     )
 
-    assert load_node_ids[0] == -1       # boundary-spanning: no load node
+    assert load_node_ids[0] == -1  # boundary-spanning: no load node
     assert relative_sels[0] is None
-    assert load_node_ids[1] == 0        # fits in one chunk: has a load node
+    assert load_node_ids[1] == 0  # fits in one chunk: has a load node
     assert relative_sels[1] is not None
 
 
@@ -292,7 +300,11 @@ def test_load_layer_generate_dask_workflow():
             "frequency": xr.DataArray(
                 freq_vals,
                 dims=["frequency"],
-                attrs={"units": "Hz", "type": "spectral_coord", "velocity_frame": "lsrk"},
+                attrs={
+                    "units": "Hz",
+                    "type": "spectral_coord",
+                    "velocity_frame": "lsrk",
+                },
             )
         },
     )

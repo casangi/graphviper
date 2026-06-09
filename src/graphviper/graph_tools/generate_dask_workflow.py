@@ -1,3 +1,5 @@
+import contextlib
+
 import dask
 from collections import defaultdict
 
@@ -68,8 +70,40 @@ def _prepare_task_input(loaded_data, relative_data_selection, input_params):
     return result
 
 
-def generate_dask_workflow(viper_graph):
-    with dask.annotate(resources={"slots": 1}):
+def generate_dask_workflow(viper_graph, use_resource_restrictions=False):
+    """Build the Dask graph (``dask.delayed`` objects) for a viper map/reduce graph.
+
+    Parameters
+    ----------
+    viper_graph : dict
+        The graph description produced by :func:`graphviper.graph_tools.map.map`
+        (and optionally :func:`graphviper.graph_tools.reduce.reduce`).
+    use_resource_restrictions : bool, default False
+        When ``True`` every task is annotated with ``resources={"slots": 1}`` so
+        the distributed scheduler runs at most one node task per worker "slot".
+        This only works if the workers actually advertise a ``"slots"`` resource
+        (e.g. start the cluster with ``resources={"slots": N}``). If they do not,
+        the tasks are unschedulable and ``dask.compute`` hangs forever with no
+        scheduler activity. It is therefore **off by default** so graphs run on
+        any worker/scheduler (plain ``Client``, ``local_client``, synchronous)
+        without special cluster configuration.
+
+    Returns
+    -------
+    list or dask.delayed
+        The list of ``dask.delayed`` map nodes, or a single reduced node when a
+        reduce stage is present.
+    """
+    # Optional per-worker concurrency limit via a "slots" resource. Enabled only
+    # when requested AND the cluster advertises matching slots; a no-op context
+    # otherwise so the graph schedules on any worker.
+    resource_annotation = (
+        dask.annotate(resources={"slots": 1})
+        if use_resource_restrictions
+        else contextlib.nullcontext()
+    )
+
+    with resource_annotation:
         dask_graph = []
 
         if "load" in viper_graph:
@@ -112,7 +146,9 @@ def generate_dask_workflow(viper_graph):
                     # the binary tree reduction.
                     pair_id = group_task_counter[load_node_id] // 2
                     group_task_counter[load_node_id] += 1
-                    with dask.annotate(viper_load_group=load_node_id, viper_map_pair=pair_id):
+                    with dask.annotate(
+                        viper_load_group=load_node_id, viper_map_pair=pair_id
+                    ):
                         task_input = dask.delayed(_prepare_task_input)(
                             load_node, rel_sel, delayed_params
                         )
@@ -120,7 +156,9 @@ def generate_dask_workflow(viper_graph):
         else:
             for input_params in viper_graph["map"]["input_params"]:
                 dask_graph.append(
-                    dask.delayed(viper_graph["map"]["node_task"])(dask.delayed(input_params))
+                    dask.delayed(viper_graph["map"]["node_task"])(
+                        dask.delayed(input_params)
+                    )
                 )
 
         if "reduce" in viper_graph:

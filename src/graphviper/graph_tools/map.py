@@ -123,7 +123,9 @@ def map(
         if load_node_input_params is None:
             load_node_input_params = {}
         load_input_params_list, load_node_ids, relative_data_selections = (
-            _build_load_stage(input_param_list, disk_chunk_sizes, load_node_input_params)
+            _build_load_stage(
+                input_param_list, disk_chunk_sizes, load_node_input_params
+            )
         )
         graph["load"] = {
             "node_task": data_loading_task,
