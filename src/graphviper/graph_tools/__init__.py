@@ -5,7 +5,7 @@ from .coordinate_utils import (
     interpolate_data_coords_onto_parallel_coords,
     get_disk_chunk_sizes,
 )
-from .map import map
+from .map import map, make_graph_node_task
 from .reduce import reduce
 from .generate_dask_workflow import generate_dask_workflow
 from .generate_airflow_workflow import (

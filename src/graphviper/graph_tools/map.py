@@ -2,6 +2,8 @@ import os
 import math
 import dask
 import datetime
+import functools
+import inspect
 
 import numpy as np
 import toolviper.utils.logger as logger
@@ -10,6 +12,77 @@ from typing import Dict, Union
 from typing import Callable, Any, Tuple, Dict
 import xarray as xr
 import copy
+
+
+def make_graph_node_task(node_task: Callable) -> Callable:
+    """Adapt ``node_task`` to the single-``input_params``-dict calling convention.
+
+    A graph node task is always invoked with a single ``input_params`` dict (into
+    which :func:`map` injects the per-node keys ``task_id``, ``task_coords``,
+    ``data_selection``, ``input_data`` ...).  Historically every node task had to
+    accept that dict as its single argument.  This helper lets a node task instead
+    have a **fully explicit, documented, standalone-callable signature**:
+
+    * If ``node_task`` follows the legacy convention -- it declares a parameter
+      named ``input_params`` (or takes a single argument) -- it is returned
+      unchanged.
+    * Otherwise a thin wrapper ``<name>_wrap(input_params)`` is returned that
+      expands the dict into ``node_task``'s explicit keyword arguments, forwarding
+      only the keys ``node_task`` declares (extra keys in ``input_params`` are
+      dropped, unless ``node_task`` accepts ``**kwargs``).
+
+    :func:`map` applies this automatically, so callers normally never need it --
+    they simply pass either an ``input_params``-style or an explicit node task.
+
+    Parameters
+    ----------
+    node_task : callable
+        The node-task function (legacy single-dict or explicit signature).
+
+    Returns
+    -------
+    callable
+        ``node_task`` unchanged (legacy), or a single-dict adapter named
+        ``<node_task.__name__>_wrap``.
+    """
+    sig = inspect.signature(node_task)
+    params = sig.parameters
+    has_var_kw = any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values())
+    positional_like = [
+        p
+        for p in params.values()
+        if p.kind
+        in (
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            inspect.Parameter.KEYWORD_ONLY,
+        )
+    ]
+
+    # Legacy single-dict node task: it takes the whole input_params dict as one
+    # argument (named "input_params", or simply its only argument).
+    if "input_params" in params or (len(positional_like) == 1 and not has_var_kw):
+        return node_task
+
+    accepted = set(params)
+
+    @functools.wraps(node_task)
+    def wrap(input_params):
+        # Pin the mmap threshold BEFORE any large allocations so they use mmap and
+        # are returned to the OS immediately on free (no heap fragmentation). Must
+        # run at the start of the task, not after, or fragmentation is already done.
+        from toolviper.utils.memory_management import memory_setup, free_memory
+        memory_setup(131072)
+        
+        if has_var_kw:
+            return node_task(**input_params)
+        return_dict = node_task(**{k: v for k, v in input_params.items() if k in accepted})
+        free_memory()
+        return return_dict
+
+    wrap.__name__ = node_task.__name__ + "_wrap"
+    wrap.__qualname__ = getattr(node_task, "__qualname__", node_task.__name__) + "_wrap"
+    return wrap
 
 
 def map(
@@ -33,7 +106,15 @@ def map(
     node_task_data_mapping :
         Node task data mapping dictionary. See :ref:`notes <node task data mapping>` for structure of dictionary.
     node_task : Callable[..., Any]
-        The function that forms the nodes in the graph. The function must have a single input parameter that must be a dictionary. The ``input_params``, along with graph and coordinate-related parameters, will be passed to this function.
+        The function that forms the nodes in the graph. It may either follow the
+        single-dict convention (one parameter, conventionally named
+        ``input_params``, that receives the whole dict) or have a **fully
+        explicit signature** (the parameters it needs, spelled out); explicit
+        node tasks are adapted automatically via
+        :func:`make_graph_node_task`, so the spelled-out parameters are filled
+        from ``input_params`` (and the per-node keys ``task_id``,
+        ``task_coords``, ``data_selection``, ``input_data`` ...). Extra keys not
+        declared by an explicit node task are dropped.
     input_params : Dict
         The input parameters to be passed to ``node_task``.
         See notes for input parameters requirements.
@@ -80,6 +161,11 @@ def map(
 
     """
     n_tasks = len(node_task_data_mapping)
+
+    # Allow the node task to have an explicit, documented signature instead of a
+    # single ``input_params`` dict: legacy single-dict node tasks are returned
+    # unchanged, explicit ones are wrapped so they are still called with one dict.
+    node_task = make_graph_node_task(node_task)
 
     # Get local_cache configuration if enabled in toolviper.dask.client.slurm_cluster_client.
     # local_cache will be True if enabled.
