@@ -72,11 +72,14 @@ def make_graph_node_task(node_task: Callable) -> Callable:
         # are returned to the OS immediately on free (no heap fragmentation). Must
         # run at the start of the task, not after, or fragmentation is already done.
         from toolviper.utils.memory_management import memory_setup, free_memory
+
         memory_setup(131072)
-        
+
         if has_var_kw:
             return node_task(**input_params)
-        return_dict = node_task(**{k: v for k, v in input_params.items() if k in accepted})
+        return_dict = node_task(
+            **{k: v for k, v in input_params.items() if k in accepted}
+        )
         free_memory()
         return return_dict
 
