@@ -466,3 +466,85 @@ def test_map_wraps_explicit_node_task():
     assert sorted(results) == [7, 14]
     # image_size was forwarded; extra_unused / input_data / chunk_indices dropped.
     assert all(image_size == 3 for (_, _, image_size) in seen)
+
+
+def _trivial_map_graph(n):
+    """A map graph whose node task returns input_params['v'] (values 0..n-1)."""
+
+    def node(input_params):
+        return input_params["v"]
+
+    return {"map": {"node_task": node, "input_params": [{"v": i} for i in range(n)]}}
+
+
+def test_reduce_tree_n_dask_backend():
+    """The variable-arity reduce ('tree_n') produces the same result as the binary
+    'tree' and 'single_node' modes for any n_batch, on the Dask backend."""
+    import copy
+    import dask
+    from graphviper.graph_tools import reduce, generate_dask_workflow
+
+    def my_sum(inputs, params):
+        # inputs is a list of map outputs and/or already-combined partials.
+        return sum(inputs)
+
+    n = 10
+    expected = sum(range(n))  # 45
+    base = _trivial_map_graph(n)
+
+    for mode, n_batch in [
+        ("tree", 2),
+        ("single_node", 2),
+        ("tree_n", 2),
+        ("tree_n", 3),
+        ("tree_n", 4),
+        ("tree_n", n),       # single layer
+        ("tree_n", n + 50),  # n_batch larger than the input
+    ]:
+        g = reduce(copy.deepcopy(base), my_sum, {}, mode=mode, n_batch=n_batch)
+        assert g["reduce"]["mode"] == mode
+        assert g["reduce"]["n_batch"] == n_batch
+        val = dask.compute(generate_dask_workflow(g))[0]
+        assert val == expected, f"{mode}/{n_batch} gave {val}, expected {expected}"
+
+
+def test_reduce_invalid_args():
+    """reduce() validates mode and n_batch."""
+    from graphviper.graph_tools import reduce
+
+    g = _trivial_map_graph(4)
+    try:
+        reduce(dict(g), lambda a, p: a, {}, mode="bogus")
+        assert False, "bad mode should raise"
+    except ValueError:
+        pass
+    # n_batch is validated unconditionally (>=2, int, not bool) -- a bad value is
+    # rejected for every mode, not only tree_n, so it can never be stored.
+    for mode in ("tree", "single_node", "tree_n"):
+        for bad in (1, 0, -1, 2.5, True):
+            try:
+                reduce(dict(g), lambda a, p: a, {}, mode=mode, n_batch=bad)
+                assert False, f"mode={mode} n_batch={bad!r} should raise"
+            except ValueError:
+                pass
+    # Valid n_batch=2 accepted for every mode.
+    for mode in ("tree", "single_node", "tree_n"):
+        out = reduce(dict(g), lambda a, p: a, {}, mode=mode, n_batch=2)
+        assert out["reduce"]["mode"] == mode and out["reduce"]["n_batch"] == 2
+
+
+def test_mpi_local_reduce_matches_dask():
+    """The MPI backend's manager-local n-ary reducer (_combine_tree_n_local)
+    matches the Dask backend for every arity. (Imports without mpi4py: the
+    mpi4py import inside processes_with_mpi is lazy.)"""
+    from graphviper.graph_tools.process_with_mpi import _combine_tree_n_local
+
+    def my_sum(inputs, params):
+        return sum(inputs)
+
+    results = list(range(10))
+    expected = sum(results)  # 45
+    for n_batch in (2, 3, 4, 10, 100):
+        assert _combine_tree_n_local(results, my_sum, {}, n_batch) == expected
+    # n_batch < 2 is clamped to 2 (defensive), still correct.
+    assert _combine_tree_n_local(results, my_sum, {}, 1) == expected

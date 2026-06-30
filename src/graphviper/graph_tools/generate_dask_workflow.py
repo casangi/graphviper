@@ -20,6 +20,34 @@ def _tree_combine(list_to_combine, reduce_node_task, input_params):
     return list_to_combine[0]
 
 
+def _tree_combine_n(list_to_combine, reduce_node_task, input_params, n_batch):
+    """Variable-arity tree reduction: combine ``n_batch`` nodes per reduce node,
+    layer by layer, until a single node remains.
+
+    Generalises :func:`_tree_combine` (which is the ``n_batch == 2`` case). Each
+    layer groups the current nodes into consecutive batches of up to ``n_batch``;
+    a full/partial batch of two-or-more becomes one ``dask.delayed`` reduce node,
+    while a trailing batch of exactly one is carried to the next layer unchanged
+    (no needless single-input reduce call). A large ``n_batch`` yields a shallow
+    tree (fewer layers, more inputs combined per reduce node), trending toward the
+    ``single_node`` extreme.
+    """
+    if n_batch < 2:
+        n_batch = 2
+    while len(list_to_combine) > 1:
+        new_list_to_combine = []
+        for i in range(0, len(list_to_combine), n_batch):
+            batch = list_to_combine[i : i + n_batch]
+            if len(batch) == 1:
+                new_list_to_combine.append(batch[0])
+            else:
+                new_list_to_combine.append(
+                    dask.delayed(reduce_node_task)(batch, input_params)
+                )
+        list_to_combine = new_list_to_combine
+    return list_to_combine[0]
+
+
 def _single_node(graph, reduce_node_task, input_params):
     return dask.delayed(reduce_node_task)(graph, input_params)
 
@@ -162,13 +190,21 @@ def generate_dask_workflow(viper_graph, use_resource_restrictions=False):
                 )
 
         if "reduce" in viper_graph:
-            if viper_graph["reduce"]["mode"] == "tree":
+            reduce_mode = viper_graph["reduce"]["mode"]
+            if reduce_mode == "tree":
                 dask_graph = _tree_combine(
                     dask_graph,
                     viper_graph["reduce"]["node_task"],
                     viper_graph["reduce"]["input_params"],
                 )
-            elif viper_graph["reduce"]["mode"] == "single_node":
+            elif reduce_mode == "tree_n":
+                dask_graph = _tree_combine_n(
+                    dask_graph,
+                    viper_graph["reduce"]["node_task"],
+                    viper_graph["reduce"]["input_params"],
+                    viper_graph["reduce"].get("n_batch", 2),
+                )
+            elif reduce_mode == "single_node":
                 dask_graph = _single_node(
                     dask_graph,
                     viper_graph["reduce"]["node_task"],

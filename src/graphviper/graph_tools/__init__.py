@@ -8,6 +8,7 @@ from .coordinate_utils import (
 from .map import map, make_graph_node_task
 from .reduce import reduce
 from .generate_dask_workflow import generate_dask_workflow
+from .process_with_mpi import processes_with_mpi
 from .generate_airflow_workflow import (
     generate_airflow_workflow,
     airflow_dag_to_graphviz,
