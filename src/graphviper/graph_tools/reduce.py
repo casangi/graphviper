@@ -63,9 +63,7 @@ def reduce(
     # never be silently stored on the graph. bool is an int subclass but
     # True/False < 2 is False/True respectively, so True is rejected as well.
     if not isinstance(n_batch, int) or isinstance(n_batch, bool) or n_batch < 2:
-        raise ValueError(
-            f"reduce n_batch must be an integer >= 2, got {n_batch!r}."
-        )
+        raise ValueError(f"reduce n_batch must be an integer >= 2, got {n_batch!r}.")
 
     graph["reduce"] = {
         "mode": mode,

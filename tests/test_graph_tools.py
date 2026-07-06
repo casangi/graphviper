@@ -498,7 +498,7 @@ def test_reduce_tree_n_dask_backend():
         ("tree_n", 2),
         ("tree_n", 3),
         ("tree_n", 4),
-        ("tree_n", n),       # single layer
+        ("tree_n", n),  # single layer
         ("tree_n", n + 50),  # n_batch larger than the input
     ]:
         g = reduce(copy.deepcopy(base), my_sum, {}, mode=mode, n_batch=n_batch)
