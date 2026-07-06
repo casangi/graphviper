@@ -128,11 +128,27 @@ def map(
         The Dask client is only required if local caching is enabled see :func:`toolviper.dask.client.slurm_cluster_client` , by default None.
     date_time : str, optional
         Used to annotate local cache, by default None.
+    data_loading_task : Callable[..., Any] or None, optional
+        Node task used by the optional data-loading layer to read one native
+        on-disk chunk of ``input_data`` at a time, shared across all map tasks
+        that fall within that chunk. The load layer is only built when **both**
+        ``data_loading_task`` and ``disk_chunk_sizes`` are provided, by default None.
+    disk_chunk_sizes : Dict[str, int] or None, optional
+        ``{dim: native_chunk_size}`` for the parallel dimensions whose on-disk
+        chunking should be used to coalesce I/O (see :func:`graphviper.graph_tools.coordinate_utils.get_disk_chunk_sizes`).
+        Required, together with ``data_loading_task``, to build the load layer, by default None.
+    load_node_input_params : dict or None, optional
+        Extra parameters merged into every load-node parameter dict (e.g.
+        ``processing_set_data_group_name``); ``None`` is treated as ``{}``, by default None.
 
     Returns
     -------
-    List:
-        List of `dask.delayed <https://docs.dask.org/en/latest/delayed-api.html>`_ objects that represent the ``Dask`` graph.
+    Dict:
+        A graph-description dictionary with a ``"map"`` layer (keys ``"node_task"``,
+        ``"input_params"``, and, when a load layer is built, ``"load_node_ids"`` and
+        ``"relative_data_selections"``) and, when a load layer is built, a ``"load"``
+        layer. This dict is consumed by :func:`graphviper.graph_tools.generate_dask_workflow`
+        (or :func:`graphviper.graph_tools.processes_with_mpi`) to build/execute the actual graph.
 
     Notes
     -----

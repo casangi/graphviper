@@ -21,9 +21,9 @@ def reduce(
 
     Parameters
     ----------
-    graph : list
+    graph : Dict
         Graph produced by :func:`graphviper.graph_tools.map`.
-    reduce_node_task : _type_
+    reduce_node_task : Callable[..., Any]
        The function that forms the nodes in the reduce portion of the graph must have two parameters: ``input_data`` and ``input_params``. The ``input_data`` represents the output from the mapping nodes, while ``input_params`` comes from the ``reduce`` parameter with the same name.
     input_params : Dict
         The input parameters to be passed to ``node_task``.
@@ -44,8 +44,19 @@ def reduce(
 
     Returns
     -------
-    list
-        List of a single `dask.delayed <https://docs.dask.org/en/latest/delayed-api.html>`_ objects that represent the ``reduce`` Dask graph.
+    Dict
+        The input ``graph`` dict with an added ``"reduce"`` entry
+        (``{"mode", "node_task", "input_params", "n_batch"}``) describing the
+        reduce step. No ``dask.delayed`` objects are constructed here; the actual
+        reduce tree is built later by
+        :func:`graphviper.graph_tools.generate_dask_workflow` (or executed by
+        :func:`graphviper.graph_tools.processes_with_mpi`).
+
+    Raises
+    ------
+    ValueError
+        If ``mode`` is not one of ``{"tree", "single_node", "tree_n"}``, or if
+        ``n_batch`` is not an integer ``>= 2`` (``bool`` is rejected too).
 
     Notes
     -----

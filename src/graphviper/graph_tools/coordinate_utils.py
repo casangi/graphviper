@@ -163,7 +163,12 @@ def make_parallel_coord(
                     ⋮
                     n_dim_chunks-1 : ...,
                 }
-                'data_chunk_edges': 1D list/np.ndarray of Number,
+                'data_chunks_edges': 1D list/np.ndarray of Number,
+                'data_chunk_slices': {
+                    0 : slice,
+                    ⋮
+                    n_dim_chunks-1 : slice,
+                }
                 'dims': (dim,),
                 'attrs': measure attribute,
             }
@@ -173,6 +178,7 @@ def make_parallel_coord(
     - ``data``: An array containing all the coordinate values associated with that dimension. These values do not necessarily have to match the values in the coordinates of the input data (dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_ or `ProcessingSet <https://github.com/casangi/xradio/blob/main/src/xradio/correlated_data/processing_set.py>`_), as those are interpolated onto these values. The minimum and maximum values can be respectively larger or smaller than the values in the coordinates of individual `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_; this will simply exclude that data from being processed. It's important to note that the :ref:`parallel_coords <parallel coords>` and the input data coordinates must have the same `measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ (reference frame, units, etc.).
     - ``data_chunks``: A dictionary where the values are chunks of the data and the keys are integers. This chunking determines the parallelism of the graph. The values in the chunks can overlap.
     - ``data_chunks_edges``: An array with the start and end values of each chunk.
+    - ``data_chunk_slices``: A dictionary with the same integer chunk keys as ``data_chunks``, where each value is a ``slice(start, stop)`` indexing that chunk into the full (unsplit) ``data`` array.
     - ``dims``: The dimension coordinate name.
     - `attrs``: The `XRADIO measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ of the data.
 
@@ -211,7 +217,7 @@ def make_parallel_coord(
             data_chunk_edges.extend([coord_data[i0], coord_data[i1 - 1]])
             data_chunk_slices[i] = slice(i0, i1)
         parallel_coord["data_chunks"] = data_chunks
-        parallel_coord["data_chunk_edges"] = data_chunk_edges
+        parallel_coord["data_chunks_edges"] = data_chunk_edges
         parallel_coord["data_chunk_slices"] = data_chunk_slices
     else:
         raise ValueError("Exactly one of n_chunks and gap must be specified")
@@ -251,7 +257,7 @@ def make_parallel_coord_by_gap(coord: Union[Dict, xr.DataArray], gap: float) -> 
         data_chunks[i] = coord_data[range(*rnge)]
         data_chunk_edges.extend([coord_data[i0], coord_data[i1 - 1]])
         parallel_coord["data_chunks"] = data_chunks
-        parallel_coord["data_chunk_edges"] = data_chunk_edges
+        parallel_coord["data_chunks_edges"] = data_chunk_edges
         parallel_coord["data"] = coord_data
         parallel_coord["dims"] = coord["dims"]
         parallel_coord["attrs"] = coord["attrs"]
@@ -516,7 +522,12 @@ def interpolate_data_coords_onto_parallel_coords(
                     ⋮
                     n_dim_0_chunks-1 : ...,
                 }
-                'data_chunk_edges': list/np.ndarray of Number,
+                'data_chunks_edges': list/np.ndarray of Number,
+                'data_chunk_slices': {
+                    0 : slice,
+                    ⋮
+                    n_dim_0_chunks-1 : slice,
+                }
                 'dims': (dim_0,),
                 'attrs': measure attribute,
             }
@@ -529,6 +540,7 @@ def interpolate_data_coords_onto_parallel_coords(
     - ``data``: An array containing all the coordinate values associated with that dimension. These values do not necessarily have to match the values in the coordinates of the input data (dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_ or `ProcessingSet <https://github.com/casangi/xradio/blob/main/src/xradio/correlated_data/processing_set.py>`_), as those are interpolated onto these values. The minimum and maximum values can be respectively larger or smaller than the values in the coordinates of individual `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_; this will simply exclude that data from being processed. It's important to note that the :ref:`parallel_coords <parallel coords>` and the input data coordinates must have the same measured attributes (reference frame, units, etc.).
     - ``data_chunks``: A dictionary where the data is broken into chunks with integer keys. This chunking determines the parallelism of the graph. The values in the chunks can overlap.
     - ``data_chunks_edges``: An array with the start and end values of each chunk.
+    - ``data_chunk_slices``: A dictionary with the same integer chunk keys as ``data_chunks``, where each value is a ``slice(start, stop)`` indexing that chunk into the full (unsplit) ``data`` array. Only present when the parallel coordinate was built with ``n_chunks`` (see :func:`make_parallel_coord`).
     - ``dims``: The dimension coordinate name.
     - `attrs``: The `XRADIO measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ of the data.
 
@@ -553,6 +565,7 @@ def interpolate_data_coords_onto_parallel_coords(
                         'data': list/np.ndarray of Number,
                         'dims': str,
                         'attrs': measure attribute,
+                        'slice': slice,
                     }
                     ⋮
                     dim_(n_dims-1): ...
@@ -566,7 +579,7 @@ def interpolate_data_coords_onto_parallel_coords(
     - ``chunk_indices``: The indices assigned to the data chunks in the :ref:`parallel_coords <parallel coords>`. There must be an index for each ``parallel_dims``.
     - ``parallel_dims``: The dimension coordinates over which parallelism will occur.
     - ``data_selection``: A dictionary where the keys are the names of the datasets in the `ProcessingSet <https://github.com/casangi/xradio/blob/main/src/xradio/correlated_data/processing_set.py>`_, and the values are dictionaries with the coordinates and accompanying slices. If a coordinate is not included, all values will be selected.
-    - ``task_coords``: The chunk of the parallel_coord that is assigned to this node.
+    - ``task_coords``: The chunk of the parallel_coord that is assigned to this node. Each per-dimension entry also carries a ``'slice'`` key giving that chunk's ``slice`` into the full coordinate (``slice(None)`` when the parallel coordinate has no ``data_chunk_slices``).
     """
     if ps_partition is None:
         ps_partition = []
@@ -701,7 +714,9 @@ def interpolate_data_coords_onto_parallel_coords(
                         ] = sel
                         if sel == slice(None):
                             empty_chunk = True
-                    else:
+                    else:  # pragma: no cover - unreachable: chunk_indices are
+                        # drawn from the same data_chunks keys that populate
+                        # xds_data_selection, so the `in` test is always True.
                         empty_chunk = True
 
                 if empty_chunk:

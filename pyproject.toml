@@ -1,6 +1,6 @@
 [project]
 name = "graphviper"
-version = "0.0.43"
+version = "0.0.44"
 description = "Visibility and Image Parallel Execution Reduction for Radio Astronomy "
 authors = [
     {name = "Jan-Willem Steeb", email="jsteeb@nrao.edu"},
@@ -82,4 +82,17 @@ all = [
     'sphinx_rtd_theme',
     'twine',
     'pandoc'
+]
+
+
+[tool.pytest.ini_options]
+# Suppress zarr v3's UnstableSpecificationWarning during test runs. It is emitted
+# for fixed-length unicode string dtypes (e.g. antenna_name / spectral_window_name
+# coordinates) throughout the XRADIO processing sets GraphVIPER operates on.
+# graphviper also silences it at import time (see
+# graphviper.__init__._suppress_zarr_unstable_warning), but pytest resets warning
+# filters per test, so it is configured here too. The message match is version
+# robust (it does not require importing the zarr warning class).
+filterwarnings = [
+    "ignore:.*does not have a Zarr V3 specification.*",
 ]

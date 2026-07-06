@@ -147,7 +147,7 @@ def _combine_tree_n_pool(executor, results, reduce_node_task, input_params, n_ba
                 pending.append(
                     (True, executor.submit(reduce_node_task, batch, input_params))
                 )
-        items = [fut.result() if is_future else val for is_future, val in pending]
+        items = [val.result() if is_future else val for is_future, val in pending]
     return items[0]
 
 
