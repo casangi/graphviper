@@ -5,7 +5,38 @@ def generate_airflow_workflow(
     filename="airflow_dag_test.py",
     dag_name="map_reduce",
 ):
+    """Generate an Airflow DAG Python source file from a viper map/reduce graph.
 
+    The map node task (and, if present, the reduce node task) are extracted with
+    :func:`inspect.getsource` and written into a standalone Airflow DAG module at
+    ``filename``. Only ``mode="single_node"`` reduce graphs are supported.
+
+    Parameters
+    ----------
+    viper_graph : Dict
+        Graph produced by :func:`graphviper.graph_tools.map.map` (and optionally
+        :func:`graphviper.graph_tools.reduce.reduce`).
+    dag_id : str, optional
+        Currently unused; retained for API compatibility, by default ``"0"``.
+    schedule_interval : optional
+        Currently unused; retained for API compatibility, by default None.
+    filename : str, optional
+        Path of the Airflow DAG Python file to write, by default
+        ``"airflow_dag_test.py"``.
+    dag_name : str, optional
+        Name of the generated ``@dag`` function, by default ``"map_reduce"``.
+
+    Returns
+    -------
+    None
+        The function writes the generated DAG source to ``filename`` as a side
+        effect and returns nothing.
+
+    Raises
+    ------
+    AssertionError
+        If a reduce stage is present with a ``mode`` other than ``"single_node"``.
+    """
     import inspect
 
     map_node_task_str = inspect.getsource(viper_graph["map"]["node_task"]).replace(
@@ -52,7 +83,7 @@ from airflow.decorators import dag, task
     tags=["example"],
 )
 def {dag_name}():
-    import graphviper.utils.logger as logger
+    import toolviper.utils.logger as logger
 
     @task()
     {map_node_task_str}
@@ -174,14 +205,17 @@ def {dag_name}():
 
 # Function to generate graphviz representation of the DAG
 def airflow_dag_to_graphviz(dag):
-    """
-    Converts an Airflow DAG to a graphviz Digraph object.
+    """Convert an Airflow DAG to a graphviz Digraph object.
 
-    Args:
-    dag: The Airflow DAG object.
+    Parameters
+    ----------
+    dag : airflow.models.DAG
+        The Airflow DAG object.
 
-    Returns:
-    A graphviz.Digraph object representing the DAG.
+    Returns
+    -------
+    graphviz.Digraph
+        A ``graphviz.Digraph`` object representing the DAG.
     """
     from graphviz import Digraph
 
