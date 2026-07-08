@@ -7,9 +7,7 @@ from graphviper.graph_tools.generate_airflow_workflow import (
 
 # The whole Airflow backend is deprecated; every call emits a
 # DeprecationWarning (asserted explicitly in test_airflow_backend_deprecated).
-pytestmark = pytest.mark.filterwarnings(
-    "ignore:.*deprecated.*:DeprecationWarning"
-)
+pytestmark = pytest.mark.filterwarnings("ignore:.*deprecated.*:DeprecationWarning")
 
 
 # Module-level node tasks so inspect.getsource works.
@@ -33,9 +31,7 @@ def _make_map_graph():
 
 def test_airflow_backend_deprecated(tmp_path):
     with pytest.deprecated_call():
-        generate_airflow_workflow(
-            _make_map_graph(), filename=str(tmp_path / "dag.py")
-        )
+        generate_airflow_workflow(_make_map_graph(), filename=str(tmp_path / "dag.py"))
     with pytest.deprecated_call():
         airflow_dag_to_graphviz(_FakeDag("d", []))
 
