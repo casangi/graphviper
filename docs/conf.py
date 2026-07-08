@@ -62,12 +62,20 @@ Open in Colab: https://colab.research.google.com/github/casangi/graph_viper/blob
 ----
 """
 
-autoapi_dirs = ["../src/graphviper/graph_tools"]
+autoapi_dirs = ["../src/graphviper"]
 autoapi_add_toctree_entry = False
 autoapi_generate_api_docs = True
 autoapi_root = "_api/autoapi"
-autoapi_options = ["show-module-summary"]
-autoapi_template_dir = "_templates"
+# Note: keep "undoc-members" here. Most graphviper modules/packages have no
+# top-level docstring, and sphinx-autoapi skips undocumented modules (and
+# cascades hide=True onto every submodule of a skipped package) when
+# "undoc-members" is absent, which silently produces an empty API section.
+autoapi_options = [
+    "members",
+    "undoc-members",
+    "show-inheritance",
+    "show-module-summary",
+]
 autoapi_keep_files = True
 autoapi_ignore = ["*/_utils/*", "*/__pycache__/*", "*/data/_*"]
 

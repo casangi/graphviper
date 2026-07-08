@@ -1,26 +1,23 @@
 ################################################
-# minimal set of packages needed by sphinx to build documentation
-# since mock imports doesnt work with automodapi, and some ngcasa modules import things
-# at the top level, additional packages (numba, dask, scipy etc) are needed right now
-# that will slow down readthedocs
+# Packages needed by Sphinx to build the GraphVIPER documentation (Read the Docs).
+#
+# Pins are kept modern and loosely bounded. Do NOT re-pin sphinx-autoapi to an old
+# 3.0.x: autoapi 3.0.0 does not constrain astroid, so pip resolves a newer astroid
+# whose AstroidBuilder.__init__() requires a `manager` argument. autoapi 3.0.0 calls
+# AstroidBuilder() without it, raising TypeError on every source file, which autoapi
+# swallows as "Unable to read file" and silently produces an EMPTY API section.
+# sphinx-autoapi >= 3.6 pins a compatible astroid range itself.
 ################################################
-Sphinx==7.2.6
-sphinx-autoapi==3.0.0
-sphinx-autosummary-accessors==2023.4.0
-sphinx-rtd-theme==1.3.0
-sphinxcontrib-applehelp==1.0.7
-sphinxcontrib-devhelp==1.0.5
-sphinxcontrib-htmlhelp==2.0.4
-sphinxcontrib-jquery==4.1
-sphinxcontrib-jsmath==1.0.1
-sphinxcontrib-qthelp==1.0.6
-sphinxcontrib-serializinghtml==1.1.9
-ipykernel==6.25.2
-ipympl==0.9.3
-ipython==8.16.1
-jupyter-client==8.4.0
-nbsphinx==0.9.3
-recommonmark==0.7.1
-scanpydoc==0.9.5
-twine==4.0.2
-pandoc==2.3
+Sphinx>=7.4,<9
+sphinx-autoapi>=3.6
+sphinx-autosummary-accessors>=2023.4
+sphinx-rtd-theme>=2.0
+nbsphinx>=0.9
+recommonmark>=0.7
+scanpydoc>=0.12
+ipykernel>=6
+ipympl>=0.9
+ipython>=8
+jupyter-client>=8
+twine>=4
+pandoc>=2

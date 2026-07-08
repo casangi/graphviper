@@ -119,6 +119,8 @@ instance/
 
 # Sphinx documentation
 docs/_build/
+# sphinx-autoapi generated API sources (autoapi_keep_files=True; regenerated each build)
+docs/_api/
 
 # PyBuilder
 target/
