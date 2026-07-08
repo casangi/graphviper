@@ -17,4 +17,3 @@ The best place to start with GraphVIPER is doing the `graph building tutorial <h
    graph_building_tutorial
    graph_building_tutorial_image
    sd_tutorial
-   airflow_tutorial

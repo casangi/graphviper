@@ -647,16 +647,20 @@ def interpolate_data_coords_onto_parallel_coords(
                 if interp_index[i] == -1 and interp_index[i + 1] == -1:
                     chunk_indx_start_stop[chunk_index] = slice(None)
                     if edges[i] < coord_min and edges[i + 1] > coord_max:
+                        # Chunk spans the entire coordinate range.
                         interp_index[i] = 0
-                        interp_index[i + 1] = -2
+                        interp_index[i + 1] = len(coord_values) - 1
                         chunk_indx_start_stop[chunk_index] = slice(
                             interp_index[i], interp_index[i + 1] + 1
                         )
                 else:
                     if interp_index[i] == -1:
+                        # Start edge below the coordinate range.
                         interp_index[i] = 0
                     if interp_index[i + 1] == -1:
-                        interp_index[i + 1] = -2
+                        # End edge beyond the coordinate range: include
+                        # through the last sample.
+                        interp_index[i + 1] = len(coord_values) - 1
                     chunk_indx_start_stop[chunk_index] = slice(
                         interp_index[i], interp_index[i + 1] + 1
                     )
@@ -732,12 +736,16 @@ def get_disk_chunk_sizes(
 ) -> Dict[str, int]:
     """Determine the native on-disk chunk size for each parallel coordinate dimension.
 
-    When a Zarr store is opened with ``xarray`` using a dask backend
-    (``chunks={}``), the resulting dask arrays carry the native zarr chunk sizes.
-    This function reads those chunk sizes from the coordinate arrays so that the
-    caller can pass them as ``disk_chunk_sizes`` to
-    :func:`graphviper.graph_tools.map.map`, enabling the data loading layer to
-    coalesce I/O at disk-chunk granularity.
+    When a Zarr store is opened lazily with ``xarray`` (``chunks={}`` or
+    equivalent, as :func:`xradio.measurement_set.open_processing_set` does), the
+    resulting dask arrays of the **data variables** carry the native zarr chunk
+    sizes.  This function reads those chunk sizes so that the caller can pass
+    them as ``disk_chunk_sizes`` to :func:`graphviper.graph_tools.map.map`,
+    enabling the data loading layer to coalesce I/O at disk-chunk granularity.
+
+    Data variables — not coordinates — are inspected because ``xarray`` always
+    loads dimension coordinates eagerly into memory as numpy-backed indexes, so
+    coordinate arrays carry no on-disk chunk information.
 
     Only the dimensions listed in *parallel_coords* are inspected; non-parallel
     dimensions are ignored.
@@ -746,11 +754,11 @@ def get_disk_chunk_sizes(
     ----------
     input_data : Union[Dict, xr.DataTree]
         The opened processing set — either an ``xr.DataTree`` or a plain dict of
-        ``xr.Dataset``.  The datasets must have been opened with a dask backend
-        (``chunks={}`` or equivalent) so that their coordinates are backed by
-        dask arrays with chunk information.  If a coordinate is numpy-backed (no
-        chunk information), the full coordinate length is used as the chunk size,
-        which is equivalent to treating the entire axis as a single disk chunk.
+        ``xr.Dataset``.  The datasets must have been opened lazily (``chunks={}``
+        or equivalent) so that their data variables are backed by dask arrays
+        with chunk information.  If no dask-backed data variable carries a given
+        dimension, the full axis length is used as the chunk size, which is
+        equivalent to treating the entire axis as a single disk chunk.
     parallel_coords : Dict
         The parallel coordinates dict as produced by :func:`make_parallel_coord`.
         Only the keys (dimension names) are used.
@@ -760,9 +768,9 @@ def get_disk_chunk_sizes(
     Dict[str, int]
         ``{dim: native_chunk_size}`` for every dimension in *parallel_coords*
         that is found in at least one dataset.  The returned chunk size is the
-        **minimum first-chunk size** observed across all datasets, which is the
-        conservative choice when datasets in the same processing set have
-        different on-disk chunking for the same dimension.
+        **minimum first-chunk size** observed across all data variables and
+        datasets, which is the conservative choice when arrays in the same
+        processing set have different on-disk chunking for the same dimension.
 
     Notes
     -----
@@ -789,19 +797,29 @@ def get_disk_chunk_sizes(
             # the dataset directly.
             ds = xds.ds if isinstance(xds, xr.DataTree) else xds
 
-            if dim not in ds.coords:
+            if dim not in ds.dims and dim not in ds.coords:
                 continue
 
-            coord_array = ds[dim]
-            coord_data = coord_array.data  # dask array or numpy array
+            first_chunk: Optional[int] = None
+            for data_var in ds.data_vars.values():
+                if dim not in data_var.dims:
+                    continue
+                var_data = data_var.data  # dask array or numpy array
+                if hasattr(var_data, "chunks") and var_data.chunks:
+                    # Dask array: chunks is a tuple-of-tuples, one tuple per
+                    # axis; read the first chunk along this dimension's axis.
+                    axis = data_var.dims.index(dim)
+                    var_first_chunk = int(var_data.chunks[axis][0])
+                    if first_chunk is None or var_first_chunk < first_chunk:
+                        first_chunk = var_first_chunk
 
-            if hasattr(coord_data, "chunks") and coord_data.chunks:
-                # Dask array: chunks is a tuple-of-tuples, one tuple per axis.
-                # For a 1-D coordinate there is exactly one axis (index 0).
-                first_chunk = int(coord_data.chunks[0][0])
-            else:
-                # Numpy-backed (no dask): treat the whole axis as one chunk.
-                first_chunk = int(coord_array.size)
+            if first_chunk is None:
+                # No dask-backed data variable carries this dimension:
+                # treat the whole axis as one chunk.
+                if dim in ds.sizes:
+                    first_chunk = int(ds.sizes[dim])
+                else:
+                    first_chunk = int(ds[dim].size)
 
             if min_chunk_size is None or first_chunk < min_chunk_size:
                 min_chunk_size = first_chunk

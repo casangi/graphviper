@@ -1,3 +1,6 @@
+import warnings
+
+
 def generate_airflow_workflow(
     viper_graph,
     dag_id="0",
@@ -6,6 +9,11 @@ def generate_airflow_workflow(
     dag_name="map_reduce",
 ):
     """Generate an Airflow DAG Python source file from a viper map/reduce graph.
+
+    .. deprecated::
+        The Airflow backend is deprecated and will be removed in a future
+        release. Use :func:`graphviper.graph_tools.generate_dask_workflow.generate_dask_workflow`
+        or :func:`graphviper.graph_tools.process_with_mpi.processes_with_mpi` instead.
 
     The map node task (and, if present, the reduce node task) are extracted with
     :func:`inspect.getsource` and written into a standalone Airflow DAG module at
@@ -37,6 +45,13 @@ def generate_airflow_workflow(
     AssertionError
         If a reduce stage is present with a ``mode`` other than ``"single_node"``.
     """
+    warnings.warn(
+        "generate_airflow_workflow is deprecated and will be removed in a "
+        "future release; use generate_dask_workflow or processes_with_mpi "
+        "instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     import inspect
 
     map_node_task_str = inspect.getsource(viper_graph["map"]["node_task"]).replace(
@@ -207,6 +222,10 @@ def {dag_name}():
 def airflow_dag_to_graphviz(dag):
     """Convert an Airflow DAG to a graphviz Digraph object.
 
+    .. deprecated::
+        The Airflow backend is deprecated and will be removed in a future
+        release.
+
     Parameters
     ----------
     dag : airflow.models.DAG
@@ -217,6 +236,12 @@ def airflow_dag_to_graphviz(dag):
     graphviz.Digraph
         A ``graphviz.Digraph`` object representing the DAG.
     """
+    warnings.warn(
+        "airflow_dag_to_graphviz is deprecated and will be removed in a "
+        "future release.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     from graphviz import Digraph
 
     dot = Digraph(comment=f"Airflow DAG - {dag.dag_id}")
