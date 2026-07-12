@@ -12,6 +12,7 @@ requires-python = ">= 3.11, < 3.14"
 
 dependencies = [
       "xradio[zarr]>=1.2.2",
+      "psutils"
 ]
 
 
