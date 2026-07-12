@@ -338,3 +338,80 @@ def test_processes_with_mpi_use_cloudpickle_true(monkeypatch):
     import cloudpickle
 
     assert MPI.pickle.dumps is cloudpickle.dumps
+
+
+# --------------------------------------------------------------------------- #
+# Teardown watchdog (force_exit_after / teardown_force_exit_seconds)
+# --------------------------------------------------------------------------- #
+def test_force_exit_after_arms_daemon_timer():
+    import graphviper.graph_tools.process_with_mpi as pwm
+
+    timer = pwm.force_exit_after(3600)
+    try:
+        assert timer is not None
+        assert timer.daemon is True
+        assert timer.is_alive()
+        assert pwm._teardown_watchdog is timer
+    finally:
+        pwm.force_exit_after(None)  # disarm
+    assert pwm._teardown_watchdog is None
+    timer.join(timeout=5)  # cancel() is async: the thread exits on wakeup
+    assert not timer.is_alive()
+
+
+def test_force_exit_after_rearm_cancels_previous():
+    import graphviper.graph_tools.process_with_mpi as pwm
+
+    first = pwm.force_exit_after(3600)
+    second = pwm.force_exit_after(3600)
+    try:
+        assert second is not first
+        first.join(timeout=5)  # cancel() is async: the thread exits on wakeup
+        assert not first.is_alive()  # cancelled by the re-arm
+        assert second.is_alive()
+    finally:
+        pwm.force_exit_after(None)
+
+
+def test_force_exit_after_fire_calls_os_exit(monkeypatch):
+    # Invoke the timer's payload directly (never let a real timer fire) and
+    # verify it hard-exits with code 0.
+    import graphviper.graph_tools.process_with_mpi as pwm
+    import os
+
+    calls = []
+    monkeypatch.setattr(os, "_exit", lambda code: calls.append(code))
+    timer = pwm.force_exit_after(3600, note="unit test")
+    try:
+        timer.function()
+    finally:
+        pwm.force_exit_after(None)
+    assert calls == [0]
+
+
+def test_processes_with_mpi_arms_teardown_watchdog(monkeypatch):
+    import graphviper.graph_tools.process_with_mpi as pwm
+
+    install_fake_mpi(monkeypatch, world_size=2)
+    armed = []
+    monkeypatch.setattr(
+        pwm, "force_exit_after", lambda seconds, note="": armed.append(seconds)
+    )
+    graph = build_map_graph([1, 2])
+    result = processes_with_mpi(
+        graph, {"use_cloudpickle": False, "teardown_force_exit_seconds": 300}
+    )
+    assert result == [1, 2]
+    assert armed == [300]
+
+
+def test_processes_with_mpi_watchdog_off_by_default(monkeypatch):
+    import graphviper.graph_tools.process_with_mpi as pwm
+
+    install_fake_mpi(monkeypatch, world_size=2)
+    armed = []
+    monkeypatch.setattr(
+        pwm, "force_exit_after", lambda seconds, note="": armed.append(seconds)
+    )
+    assert processes_with_mpi(build_map_graph([1]), {"use_cloudpickle": False}) == [1]
+    assert armed == []

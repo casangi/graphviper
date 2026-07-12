@@ -79,6 +79,62 @@ Notes
 
 import toolviper.utils.logger as logger
 
+# Handle of the armed teardown watchdog (at most one); see force_exit_after().
+_teardown_watchdog = None
+
+
+def force_exit_after(seconds, note=""):
+    """Arm (or re-arm) a daemon watchdog that hard-exits this process after
+    ``seconds`` -- a guard against the mpi4py.futures / MPI shutdown hanging
+    after all work is done.
+
+    Rationale.  In the ``python -m mpi4py.futures`` manager-worker model the
+    global stop handshake and ``MPI_Finalize`` run at *interpreter exit*.  A
+    single worker rank wedged during its own shutdown (typically a non-daemon
+    thread stuck in an uninterruptible filesystem syscall) blocks the
+    effectively-collective finalize on every rank, idling the whole allocation
+    until walltime.  An ``atexit`` hook CANNOT guard against this: CPython
+    joins non-daemon threads (including ``concurrent.futures`` pools) *before*
+    running atexit callbacks, which is exactly where the wedge occurs.  The
+    only robust guard is a daemon thread armed while the interpreter is still
+    healthy -- this function.
+
+    Call it once the application's results are safely persisted (or use the
+    ``teardown_force_exit_seconds`` option of :func:`processes_with_mpi`).
+    Calling again re-arms the countdown; the previous timer is cancelled.
+    ``seconds`` of ``None``/``0`` just cancels any armed watchdog.
+
+    The forced exit uses ``os._exit(0)`` (no cleanup, no ``MPI_Finalize``); the
+    MPI launcher then tears down the remaining ranks.  The launcher may log the
+    exit as unclean -- harmless next to an allocation idling for hours.
+
+    Returns the armed :class:`threading.Timer` (or ``None`` if cancelling).
+    """
+    import os
+    import threading
+
+    global _teardown_watchdog
+    if _teardown_watchdog is not None:
+        _teardown_watchdog.cancel()
+        _teardown_watchdog = None
+    if not seconds:
+        return None
+
+    def _fire():
+        logger.warning(
+            "force_exit_after: process still alive "
+            f"{seconds}s after the watchdog was armed{f' ({note})' if note else ''}; "
+            "forcing exit with os._exit(0) to release the allocation."
+        )
+        os._exit(0)
+
+    timer = threading.Timer(seconds, _fire)
+    timer.daemon = True
+    timer.name = "graphviper-teardown-watchdog"
+    timer.start()
+    _teardown_watchdog = timer
+    return timer
+
 
 def _configure_cloudpickle():
     """Make the manager's mpi4py pickle node-task closures via cloudpickle.
@@ -183,6 +239,16 @@ def processes_with_mpi(viper_graph, cluster_setup=None):
           cloudpickle so closure node tasks serialise; default ``True``.
         * ``progress_every`` (int or None) -- if set, log a progress line every
           this many completed map tasks.
+        * ``teardown_force_exit_seconds`` (float or None) -- if set, arm
+          :func:`force_exit_after` with this grace period when the compute
+          returns, guarding against the mpi4py.futures / MPI_Finalize shutdown
+          hang at interpreter exit (one wedged worker rank can idle the whole
+          allocation until walltime).  Default ``None`` (off): only enable in
+          run-one-graph-then-exit programs (batch jobs); a long-lived
+          application that keeps working after this call would be killed
+          mid-flight unless it re-arms or cancels via
+          ``force_exit_after(None)``.  A subsequent ``processes_with_mpi``
+          call re-arms the countdown.
 
     Returns
     -------
@@ -197,6 +263,7 @@ def processes_with_mpi(viper_graph, cluster_setup=None):
     reduce_in_pool = cluster_setup.get("reduce_in_pool", False)
     use_cloudpickle = cluster_setup.get("use_cloudpickle", True)
     progress_every = cluster_setup.get("progress_every", None)
+    teardown_force_exit_seconds = cluster_setup.get("teardown_force_exit_seconds", None)
 
     from mpi4py import MPI
     from mpi4py.futures import MPIPoolExecutor
@@ -267,34 +334,53 @@ def processes_with_mpi(viper_graph, cluster_setup=None):
 
         # ---- REDUCE (optional) ---------------------------------------------
         if "reduce" not in viper_graph:
-            return map_results
-
-        reduce_node_task = viper_graph["reduce"]["node_task"]
-        reduce_input_params = viper_graph["reduce"]["input_params"]
-        # Read mode without a default so a malformed graph fails loudly (like the
-        # Dask backend, which indexes ["mode"]) instead of silently tree-reducing.
-        mode = viper_graph["reduce"]["mode"]
-        n_batch = viper_graph["reduce"].get("n_batch", 2)
-
-        if mode == "single_node":
-            # All map outputs combined by one reduce call.
-            if reduce_in_pool:
-                return executor.submit(
-                    reduce_node_task, map_results, reduce_input_params
-                ).result()
-            return reduce_node_task(map_results, reduce_input_params)
-        elif mode in ("tree", "tree_n"):
-            # "tree" == tree_n with n_batch=2 (binary).
-            arity = n_batch if mode == "tree_n" else 2
-            if reduce_in_pool:
-                return _combine_tree_n_pool(
-                    executor, map_results, reduce_node_task, reduce_input_params, arity
-                )
-            return _combine_tree_n_local(
-                map_results, reduce_node_task, reduce_input_params, arity
-            )
+            result = map_results
         else:
-            raise ValueError(
-                f"Unknown reduce mode {mode!r}; expected 'tree', 'tree_n', or "
-                "'single_node'."
-            )
+            reduce_node_task = viper_graph["reduce"]["node_task"]
+            reduce_input_params = viper_graph["reduce"]["input_params"]
+            # Read mode without a default so a malformed graph fails loudly (like
+            # the Dask backend, which indexes ["mode"]) instead of silently
+            # tree-reducing.
+            mode = viper_graph["reduce"]["mode"]
+            n_batch = viper_graph["reduce"].get("n_batch", 2)
+
+            if mode == "single_node":
+                # All map outputs combined by one reduce call.
+                if reduce_in_pool:
+                    result = executor.submit(
+                        reduce_node_task, map_results, reduce_input_params
+                    ).result()
+                else:
+                    result = reduce_node_task(map_results, reduce_input_params)
+            elif mode in ("tree", "tree_n"):
+                # "tree" == tree_n with n_batch=2 (binary).
+                arity = n_batch if mode == "tree_n" else 2
+                if reduce_in_pool:
+                    result = _combine_tree_n_pool(
+                        executor,
+                        map_results,
+                        reduce_node_task,
+                        reduce_input_params,
+                        arity,
+                    )
+                else:
+                    result = _combine_tree_n_local(
+                        map_results, reduce_node_task, reduce_input_params, arity
+                    )
+            else:
+                raise ValueError(
+                    f"Unknown reduce mode {mode!r}; expected 'tree', 'tree_n', or "
+                    "'single_node'."
+                )
+
+    # Outside the with-block: the executor has shut down cleanly. The remaining
+    # hang risk is the global worker-stop + MPI_Finalize at interpreter exit.
+    if teardown_force_exit_seconds:
+        logger.info(
+            "processes_with_mpi: arming teardown watchdog "
+            f"(force exit in {teardown_force_exit_seconds}s if shutdown hangs)."
+        )
+        force_exit_after(
+            teardown_force_exit_seconds, note="armed by processes_with_mpi"
+        )
+    return result

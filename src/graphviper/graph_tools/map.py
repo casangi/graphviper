@@ -88,6 +88,134 @@ def make_graph_node_task(node_task: Callable) -> Callable:
     return wrap
 
 
+def _sample_process_resources(interval, stop_event, samples):
+    """Sampler-thread body: append one sample per ``interval`` to ``samples``.
+
+    Runs inside the worker process. Counters are PER PROCESS (psutil.Process()),
+    so attribution to the running task is exact only when the process executes
+    one task at a time (Dask threads_per_worker=1, or MPI ranks); with several
+    concurrent task threads the series describes the whole process.
+
+    A final sample is taken after the stop event fires so even tasks shorter
+    than ``interval`` get at least one point.
+    """
+    import time
+
+    import psutil
+
+    proc = psutil.Process()
+    proc.cpu_percent(None)  # establish the CPU% baseline (first call returns 0)
+    # Probe I/O counter availability once (Linux/Windows only -- hence the
+    # getattr; *_chars are the Linux syscall-level counters, which -- unlike
+    # *_bytes, which only count block-device traffic -- include network
+    # filesystems such as Lustre).
+    io_counters = getattr(proc, "io_counters", None)
+    try:
+        io0 = io_counters() if io_counters is not None else None
+        has_io = io0 is not None
+        has_chars = hasattr(io0, "read_chars")
+    except Exception:
+        has_io = has_chars = False
+
+    t0 = time.monotonic()
+    stopping = False
+    while True:
+        samples["time_seconds"].append(time.monotonic() - t0)
+        samples["cpu_percent"].append(proc.cpu_percent(None))
+        samples["memory_rss_bytes"].append(proc.memory_info().rss)
+        if has_io:
+            try:
+                io = io_counters()
+                samples["read_bytes"].append(io.read_bytes)
+                samples["write_bytes"].append(io.write_bytes)
+                if has_chars:
+                    samples["read_chars"].append(io.read_chars)
+                    samples["write_chars"].append(io.write_chars)
+            except Exception:  # keep the series rectangular if counters vanish
+                has_io = False
+        if stopping:
+            return
+        # wait() returns True when the task finished -> take one last sample.
+        stopping = stop_event.wait(interval)
+
+
+def monitor_node_task(node_task, interval):
+    """Wrap a (single-dict-convention) node task so its process CPU / memory /
+    I/O usage is sampled every ``interval`` seconds while it runs, and the
+    series is attached to the task's return dict as ``"resource_usage"``:
+
+        {"sample_interval_seconds": interval,
+         "time_seconds": [...], "cpu_percent": [...],
+         "memory_rss_bytes": [...],
+         # present when the platform exposes them:
+         "read_bytes": [...], "write_bytes": [...],      # block-level, cumulative
+         "read_chars": [...], "write_chars": [...]}      # syscall-level, cumulative
+                                                          # (includes Lustre/NFS)
+
+    Plain lists of numbers -- stdlib-pickle-serialisable, so the MPI backend's
+    worker->manager result path is safe. Tasks that do not return a dict pass
+    through unchanged (a debug line notes the dropped series). If psutil is
+    not installed the task runs unmonitored after a one-line warning.
+
+    ``cpu_percent`` covers ALL threads of the process (OpenMP included) and can
+    exceed 100. See :func:`_sample_process_resources` for the per-process
+    attribution caveat.
+    """
+
+    @functools.wraps(node_task)
+    def monitored(input_params):
+        try:
+            import psutil  # noqa: F401
+        except ImportError:
+            logger.warning(
+                "monitor_resources_seconds is set but psutil is not installed; "
+                "running the node task unmonitored."
+            )
+            return node_task(input_params)
+
+        import threading
+
+        samples = {
+            "time_seconds": [],
+            "cpu_percent": [],
+            "memory_rss_bytes": [],
+            "read_bytes": [],
+            "write_bytes": [],
+            "read_chars": [],
+            "write_chars": [],
+        }
+        stop_event = threading.Event()
+        sampler = threading.Thread(
+            target=_sample_process_resources,
+            args=(interval, stop_event, samples),
+            name="graphviper-resource-sampler",
+            daemon=True,
+        )
+        sampler.start()
+        try:
+            return_dict = node_task(input_params)
+        finally:
+            stop_event.set()
+            sampler.join(timeout=max(5.0, 2 * interval))
+
+        if isinstance(return_dict, dict):
+            usage = {k: v for k, v in samples.items() if v}
+            usage["sample_interval_seconds"] = interval
+            return_dict["resource_usage"] = usage
+        else:
+            logger.debug(
+                "monitor_node_task: node task did not return a dict; "
+                "resource-usage series dropped."
+            )
+        return return_dict
+
+    monitored.__name__ = node_task.__name__ + "_monitored"
+    monitored.__qualname__ = (
+        getattr(node_task, "__qualname__", node_task.__name__) + "_monitored"
+    )
+    return monitored
+
+
 def map(
     input_data: Union[Dict, xr.DataTree],
     node_task_data_mapping: dict,
@@ -99,6 +227,7 @@ def map(
     data_loading_task: Union[Callable[..., Any], None] = None,
     disk_chunk_sizes: Union[Dict[str, int], None] = None,
     load_node_input_params: Union[dict, None] = None,
+    monitor_resources_seconds: Union[float, None] = None,
 ) -> Dict:
     """Create a perfectly parallel graph where a node is generated for each item in the :ref:`node_task_data_mapping <node task data mapping>` using the function specified in the ``node_task`` parameter.
 
@@ -140,6 +269,15 @@ def map(
     load_node_input_params : dict or None, optional
         Extra parameters merged into every load-node parameter dict (e.g.
         ``processing_set_data_group_name``); ``None`` is treated as ``{}``, by default None.
+    monitor_resources_seconds : float or None, optional
+        If set, sample the worker process's CPU / memory / I/O usage every this
+        many seconds while each map node task runs, and attach the series to the
+        task's return dict under ``"resource_usage"`` (see
+        :func:`monitor_node_task` for the exact keys and the per-process
+        attribution caveat -- accurate per-task attribution needs one concurrent
+        task per process, e.g. Dask ``threads_per_worker=1`` or MPI ranks).
+        Requires ``psutil`` (task runs unmonitored with a warning if missing).
+        By default None (no monitoring, zero overhead).
 
     Returns
     -------
@@ -185,6 +323,12 @@ def map(
     # single ``input_params`` dict: legacy single-dict node tasks are returned
     # unchanged, explicit ones are wrapped so they are still called with one dict.
     node_task = make_graph_node_task(node_task)
+
+    # Optional per-task resource sampling (CPU / memory / I/O series appended to
+    # the task's return dict). Applied AFTER the signature adapter so the sampler
+    # brackets the whole task body regardless of node-task style.
+    if monitor_resources_seconds:
+        node_task = monitor_node_task(node_task, monitor_resources_seconds)
 
     # Get local_cache configuration if enabled in toolviper.dask.client.slurm_cluster_client.
     # local_cache will be True if enabled.

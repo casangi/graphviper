@@ -388,3 +388,113 @@ def test_build_load_stage_non_disk_dim_keeps_original_slice():
     # relative selection keeps the original absolute slice for the non-disk dim.
     assert relative_sels[0]["xds_0"]["time"] == slice(2, 8)
     assert relative_sels[0]["xds_0"]["frequency"] == slice(0, 5)
+
+
+# --------------------------------------------------------------------------- #
+# monitor_node_task / map(monitor_resources_seconds=...)
+# --------------------------------------------------------------------------- #
+def test_monitor_node_task_attaches_series():
+    from graphviper.graph_tools.map import monitor_node_task
+    import pickle
+    import time
+
+    def node(input_params):
+        time.sleep(0.08)
+        return {"task_id": input_params["task_id"]}
+
+    out = monitor_node_task(node, 0.02)({"task_id": 3})
+    assert out["task_id"] == 3  # original payload intact
+    usage = out["resource_usage"]
+    assert usage["sample_interval_seconds"] == 0.02
+    n = len(usage["time_seconds"])
+    assert n >= 1
+    assert len(usage["cpu_percent"]) == n
+    assert len(usage["memory_rss_bytes"]) == n
+    assert all(b > 0 for b in usage["memory_rss_bytes"])
+    # MPI worker->manager results must be stdlib-pickle-serialisable.
+    pickle.dumps(out)
+
+
+def test_monitor_node_task_short_task_gets_final_sample():
+    from graphviper.graph_tools.map import monitor_node_task
+
+    out = monitor_node_task(lambda p: {"ok": 1}, 60.0)({})
+    # initial sample + the final sample taken on stop, despite interval >> runtime
+    assert len(out["resource_usage"]["time_seconds"]) >= 1
+    assert out["ok"] == 1
+
+
+def test_monitor_node_task_non_dict_passthrough():
+    from graphviper.graph_tools.map import monitor_node_task
+
+    assert monitor_node_task(lambda p: [1, 2, 3], 0.02)({}) == [1, 2, 3]
+
+
+def test_monitor_node_task_without_psutil_runs_unmonitored(monkeypatch):
+    import sys
+    from graphviper.graph_tools.map import monitor_node_task
+
+    # `import psutil` raises ImportError when the module is None in sys.modules.
+    monkeypatch.setitem(sys.modules, "psutil", None)
+    out = monitor_node_task(lambda p: {"ok": 1}, 0.02)({})
+    assert out == {"ok": 1}  # no resource_usage key, task result untouched
+
+
+def test_map_monitor_resources_wraps_node_task():
+    import time
+
+    xds = _make_xds(3)
+    node_task_data_mapping = {
+        0: {
+            "chunk_indices": (0,),
+            "parallel_dims": ["frequency"],
+            "data_selection": {"xds_0": {"frequency": slice(0, 3)}},
+            "task_coords": {},
+        },
+    }
+
+    def node(input_params):
+        time.sleep(0.05)
+        return {"task_id": input_params["task_id"]}
+
+    graph = viper_map(
+        input_data={"xds_0": xds},
+        node_task_data_mapping=node_task_data_mapping,
+        node_task=node,
+        input_params={},
+        in_memory_compute=True,
+        client=None,
+        monitor_resources_seconds=0.02,
+    )
+    assert graph["map"]["node_task"].__name__.endswith("_monitored")
+    out = graph["map"]["node_task"](graph["map"]["input_params"][0])
+    assert out["task_id"] == 0
+    assert len(out["resource_usage"]["time_seconds"]) >= 1
+
+
+def test_map_monitor_resources_off_by_default():
+    xds = _make_xds(3)
+    node_task_data_mapping = {
+        0: {
+            "chunk_indices": (0,),
+            "parallel_dims": ["frequency"],
+            "data_selection": {"xds_0": {"frequency": slice(0, 3)}},
+            "task_coords": {},
+        },
+    }
+
+    def node(input_params):
+        return {"task_id": input_params["task_id"]}
+
+    graph = viper_map(
+        input_data={"xds_0": xds},
+        node_task_data_mapping=node_task_data_mapping,
+        node_task=node,
+        input_params={},
+        in_memory_compute=True,
+        client=None,
+    )
+    assert not graph["map"]["node_task"].__name__.endswith("_monitored")
+    assert "resource_usage" not in graph["map"]["node_task"](
+        graph["map"]["input_params"][0]
+    )
