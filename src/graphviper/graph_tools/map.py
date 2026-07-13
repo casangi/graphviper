@@ -145,6 +145,7 @@ def monitor_node_task(node_task, interval):
     series is attached to the task's return dict as ``"resource_usage"``:
 
         {"sample_interval_seconds": interval,
+         "start_unixtime": <time.time() when sampling began>,
          "time_seconds": [...], "cpu_percent": [...],
          "memory_rss_bytes": [...],
          # present when the platform exposes them:
@@ -174,6 +175,7 @@ def monitor_node_task(node_task, interval):
             return node_task(input_params)
 
         import threading
+        import time
 
         samples = {
             "time_seconds": [],
@@ -191,6 +193,11 @@ def monitor_node_task(node_task, interval):
             name="graphviper-resource-sampler",
             daemon=True,
         )
+        # Wall-clock anchor for the relative time_seconds series: lets an
+        # analysis place every task on the run's common timeline (cluster-wide
+        # usage at time t). Cross-node comparability relies on NTP-synced node
+        # clocks -- fine at typical sampling intervals.
+        start_unixtime = time.time()
         sampler.start()
         try:
             return_dict = node_task(input_params)
@@ -201,6 +208,7 @@ def monitor_node_task(node_task, interval):
         if isinstance(return_dict, dict):
             usage = {k: v for k, v in samples.items() if v}
             usage["sample_interval_seconds"] = interval
+            usage["start_unixtime"] = start_unixtime
             return_dict["resource_usage"] = usage
         else:
             logger.debug(

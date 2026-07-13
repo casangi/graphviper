@@ -406,6 +406,7 @@ def test_monitor_node_task_attaches_series():
     assert out["task_id"] == 3  # original payload intact
     usage = out["resource_usage"]
     assert usage["sample_interval_seconds"] == 0.02
+    assert usage["start_unixtime"] > 1e9  # wall-clock anchor for run timelines
     n = len(usage["time_seconds"])
     assert n >= 1
     assert len(usage["cpu_percent"]) == n
