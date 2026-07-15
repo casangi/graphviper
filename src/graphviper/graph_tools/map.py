@@ -236,6 +236,7 @@ def map(
     disk_chunk_sizes: Union[Dict[str, int], None] = None,
     load_node_input_params: Union[dict, None] = None,
     monitor_resources_seconds: Union[float, None] = None,
+    task_priorities: Union[dict, None] = None,
 ) -> Dict:
     """Create a perfectly parallel graph where a node is generated for each item in the :ref:`node_task_data_mapping <node task data mapping>` using the function specified in the ``node_task`` parameter.
 
@@ -286,12 +287,23 @@ def map(
         task per process, e.g. Dask ``threads_per_worker=1`` or MPI ranks).
         Requires ``psutil`` (task runs unmonitored with a warning if missing).
         By default None (no monitoring, zero overhead).
+    task_priorities : dict or None, optional
+        ``{task_id: priority}`` scheduling priorities for the map tasks (higher
+        runs earlier, matching Dask's ``priority`` annotation convention).
+        Task ids missing from the dict get no priority (Dask default 0). The
+        Dask backend applies them as per-node ``dask.annotate(priority=...)``;
+        the MPI backend (:func:`graphviper.graph_tools.processes_with_mpi`)
+        dispatches tasks in priority order instead. Use this to control the
+        order concurrent tasks are started in, e.g. so tasks writing to the
+        same on-disk shard are spread out in time. By default None (all tasks
+        equal priority, dispatch in task_id order).
 
     Returns
     -------
     Dict:
         A graph-description dictionary with a ``"map"`` layer (keys ``"node_task"``,
-        ``"input_params"``, and, when a load layer is built, ``"load_node_ids"`` and
+        ``"input_params"``, ``"task_priorities"`` when priorities were given, and,
+        when a load layer is built, ``"load_node_ids"`` and
         ``"relative_data_selections"``) and, when a load layer is built, a ``"load"``
         layer. This dict is consumed by :func:`graphviper.graph_tools.generate_dask_workflow`
         (or :func:`graphviper.graph_tools.processes_with_mpi`) to build/execute the actual graph.
@@ -375,6 +387,13 @@ def map(
         input_param_list.append(copy.deepcopy(input_params))
 
     graph = {"map": {"node_task": node_task, "input_params": input_param_list}}
+
+    if task_priorities is not None:
+        # Stored as a list aligned with input_params (same iteration order as
+        # the loop above), so the backends can index it by list position.
+        graph["map"]["task_priorities"] = [
+            task_priorities.get(task_id) for task_id in node_task_data_mapping
+        ]
 
     if data_loading_task is not None and disk_chunk_sizes is not None:
         if load_node_input_params is None:

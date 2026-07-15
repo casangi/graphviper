@@ -499,3 +499,39 @@ def test_map_monitor_resources_off_by_default():
     assert "resource_usage" not in graph["map"]["node_task"](
         graph["map"]["input_params"][0]
     )
+
+
+# --------------------------------------------------------------------------- #
+# map(task_priorities=...)
+# --------------------------------------------------------------------------- #
+def _priority_node_task(input_params):
+    return input_params["v"]
+
+
+def test_map_task_priorities_stored_aligned():
+    """``task_priorities`` -> ``graph["map"]["task_priorities"]`` list aligned
+    with ``input_params`` (task_id order); ids missing from the dict -> None."""
+    mapping = {i: {"v": 10 * i} for i in range(3)}
+    graph = viper_map(
+        input_data={},
+        node_task_data_mapping=mapping,
+        node_task=_priority_node_task,
+        input_params={},
+        task_priorities={0: 0, 2: -5},
+    )
+    assert graph["map"]["task_priorities"] == [0, None, -5]
+    # Same order as the per-task parameter dicts.
+    assert [p["task_id"] for p in graph["map"]["input_params"]] == [0, 1, 2]
+
+
+def test_map_task_priorities_default_absent():
+    """No ``task_priorities`` -> the graph carries no key at all (backends
+    treat absence as 'no reordering')."""
+    mapping = {i: {"v": i} for i in range(2)}
+    graph = viper_map(
+        input_data={},
+        node_task_data_mapping=mapping,
+        node_task=_priority_node_task,
+        input_params={},
+    )
+    assert "task_priorities" not in graph["map"]

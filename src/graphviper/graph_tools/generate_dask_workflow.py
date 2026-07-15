@@ -116,6 +116,17 @@ def generate_dask_workflow(viper_graph):
 
     dask_graph = []
 
+    # Optional per-map-task scheduling priorities (higher runs earlier), stored
+    # by graph_tools.map as a list aligned with map input_params. Dask honors
+    # the ``priority`` annotation natively, so each map node just needs to be
+    # created inside a dask.annotate(priority=...) context.
+    task_priorities = viper_graph["map"].get("task_priorities")
+
+    def _priority_context(i):
+        if task_priorities is not None and task_priorities[i] is not None:
+            return dask.annotate(priority=task_priorities[i])
+        return contextlib.nullcontext()
+
     if "load" in viper_graph:
         # ------------------------------------------------------------------
         # Build load nodes — one dask.delayed per unique disk-chunk group.
@@ -129,10 +140,32 @@ def generate_dask_workflow(viper_graph):
         # (b) schedule reduction-adjacent task pairs together.
         # ------------------------------------------------------------------
         load_fn = viper_graph["load"]["node_task"]
+
+        # A load node inherits the HIGHEST priority among its map tasks:
+        # without this, unannotated load nodes keep Dask's default priority 0
+        # and would outrank every negatively-prioritized map task, scheduling
+        # all loads before any map runs (buffering every disk chunk at once).
+        load_priorities: dict = {}
+        if task_priorities is not None:
+            for i, lid in enumerate(viper_graph["map"]["load_node_ids"]):
+                if lid == -1 or task_priorities[i] is None:
+                    continue
+                load_priorities[lid] = (
+                    task_priorities[i]
+                    if lid not in load_priorities
+                    else max(load_priorities[lid], task_priorities[i])
+                )
+
         load_nodes = []
         for load_id, lp in enumerate(viper_graph["load"]["input_params"]):
             delayed_lp = dask.delayed(lp)
-            with dask.annotate(viper_load_group=load_id):
+            if load_id in load_priorities:
+                annotation = dask.annotate(
+                    viper_load_group=load_id, priority=load_priorities[load_id]
+                )
+            else:
+                annotation = dask.annotate(viper_load_group=load_id)
+            with annotation:
                 load_nodes.append(dask.delayed(load_fn)(delayed_lp))
 
         load_node_ids = viper_graph["map"]["load_node_ids"]
@@ -147,7 +180,8 @@ def generate_dask_workflow(viper_graph):
             delayed_params = dask.delayed(input_params)
             if load_node_id == -1:
                 # No load node for this task — fall back to per-task loading.
-                dask_graph.append(dask.delayed(map_fn)(delayed_params))
+                with _priority_context(i):
+                    dask_graph.append(dask.delayed(map_fn)(delayed_params))
             else:
                 load_node = load_nodes[load_node_id]
                 rel_sel = relative_data_selections[i]
@@ -156,20 +190,24 @@ def generate_dask_workflow(viper_graph):
                 # the binary tree reduction.
                 pair_id = group_task_counter[load_node_id] // 2
                 group_task_counter[load_node_id] += 1
-                with dask.annotate(
-                    viper_load_group=load_node_id, viper_map_pair=pair_id
+                with (
+                    _priority_context(i),
+                    dask.annotate(
+                        viper_load_group=load_node_id, viper_map_pair=pair_id
+                    ),
                 ):
                     task_input = dask.delayed(_prepare_task_input)(
                         load_node, rel_sel, delayed_params
                     )
                     dask_graph.append(dask.delayed(map_fn)(task_input))
     else:
-        for input_params in viper_graph["map"]["input_params"]:
-            dask_graph.append(
-                dask.delayed(viper_graph["map"]["node_task"])(
-                    dask.delayed(input_params)
+        for i, input_params in enumerate(viper_graph["map"]["input_params"]):
+            with _priority_context(i):
+                dask_graph.append(
+                    dask.delayed(viper_graph["map"]["node_task"])(
+                        dask.delayed(input_params)
+                    )
                 )
-            )
 
     if "reduce" in viper_graph:
         reduce_mode = viper_graph["reduce"]["mode"]

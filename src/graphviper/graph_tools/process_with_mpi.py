@@ -232,6 +232,9 @@ def processes_with_mpi(viper_graph, cluster_setup=None):
         * ``chunksize`` (int) -- ``MPIPoolExecutor.map`` chunk size; ``1``
           (default) gives the best dynamic load balancing for long, uneven node
           tasks (per-task dispatch overhead is negligible next to ~100 s tasks).
+          Forced to ``1`` (with a warning) when the graph carries
+          ``task_priorities``: a larger chunk hands each worker a consecutive
+          block of the priority order, defeating the interleaving it encodes.
         * ``reduce_in_pool`` (bool) -- if ``True`` run the reduce tree on the
           worker pool; default ``False`` reduces on the manager (the right choice
           when map results are small metadata, as in imaging).
@@ -304,6 +307,37 @@ def processes_with_mpi(viper_graph, cluster_setup=None):
     map_input_params = viper_graph["map"]["input_params"]
     n_tasks = len(map_input_params)
 
+    # Optional per-task priorities (higher first; ties keep task_id order) --
+    # the MPI equivalent of the Dask backend's dask.annotate(priority=...):
+    # MPIPoolExecutor.map dispatches items in iteration order, so submitting a
+    # priority-sorted permutation reproduces the Dask start order. The results
+    # are inverse-permuted below, preserving this function's input-order return
+    # contract (which the adjacent-combining reduce tree also relies on).
+    task_priorities = viper_graph["map"].get("task_priorities")
+    submit_order = None
+    if task_priorities is not None:
+        if chunksize != 1:
+            # chunksize=c hands each worker a CONSECUTIVE block of c items of
+            # the priority order; with shard-interleaved priorities that makes
+            # every worker's k-th task hit the same shard simultaneously --
+            # inverting the spreading the priorities encode. Per-task dispatch
+            # is already the recommended setting for long node tasks.
+            logger.warning(
+                f"processes_with_mpi: task_priorities with chunksize={chunksize} "
+                "would give each worker a consecutive block of the priority "
+                "order (defeating the intended interleaving); forcing "
+                "chunksize=1 for the map phase."
+            )
+            chunksize = 1
+        submit_order = sorted(
+            range(n_tasks),
+            key=lambda i: (
+                -(0 if task_priorities[i] is None else task_priorities[i]),
+                i,
+            ),
+        )
+        map_input_params = [map_input_params[i] for i in submit_order]
+
     if "load" in viper_graph:
         logger.warning(
             "processes_with_mpi: graph has a 'load' stage, but the MPI backend "
@@ -331,6 +365,14 @@ def processes_with_mpi(viper_graph, cluster_setup=None):
             map_results = list(
                 executor.map(map_fn, map_input_params, chunksize=chunksize)
             )
+
+        if submit_order is not None:
+            # Undo the priority permutation: map_results[k] is the result of
+            # original task submit_order[k]; put it back at its input position.
+            in_order = [None] * n_tasks
+            for k, i in enumerate(submit_order):
+                in_order[i] = map_results[k]
+            map_results = in_order
 
         # ---- REDUCE (optional) ---------------------------------------------
         if "reduce" not in viper_graph:

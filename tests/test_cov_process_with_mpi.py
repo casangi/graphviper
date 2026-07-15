@@ -415,3 +415,55 @@ def test_processes_with_mpi_watchdog_off_by_default(monkeypatch):
     )
     assert processes_with_mpi(build_map_graph([1]), {"use_cloudpickle": False}) == [1]
     assert armed == []
+
+
+def test_processes_with_mpi_task_priorities_reorders_dispatch(monkeypatch):
+    """``task_priorities`` -> dispatch order is the priority sort (higher first,
+    ties broken by task_id, None -> 0) while the RESULTS come back in input
+    order (the inverse permutation restores the documented contract)."""
+    install_fake_mpi(monkeypatch, world_size=2)
+    graph = build_map_graph([10, 20, 30, 40])
+    graph["map"]["task_priorities"] = [0, -3, None, -1]
+
+    dispatched = []
+    inner_fn = graph["map"]["node_task"]
+
+    def recording_fn(input_params):
+        dispatched.append(input_params["v"])
+        return inner_fn(input_params)
+
+    graph["map"]["node_task"] = recording_fn
+    result = processes_with_mpi(graph, {"use_cloudpickle": False})
+    # Sort key (-priority, task_id): task0 (0), task2 (None->0), task3, task1.
+    assert dispatched == [10, 30, 40, 20]
+    assert result == [10, 20, 30, 40]
+
+
+def test_processes_with_mpi_task_priorities_progress_path(monkeypatch):
+    """The inverse permutation also runs on the progress_every branch."""
+    install_fake_mpi(monkeypatch, world_size=2)
+    graph = build_map_graph([1, 2, 3])
+    graph["map"]["task_priorities"] = [-2, -1, 0]
+    result = processes_with_mpi(graph, {"use_cloudpickle": False, "progress_every": 2})
+    assert result == [1, 2, 3]
+
+
+def test_processes_with_mpi_task_priorities_with_reduce(monkeypatch):
+    """Reduce over priority-permuted map tasks still combines input-order
+    results (the adjacent-batch tree relies on the inverse permutation)."""
+    install_fake_mpi(monkeypatch, world_size=2)
+    graph = build_map_graph([1, 2, 3, 4, 5])
+    graph["map"]["task_priorities"] = [-4, -3, -2, -1, 0]
+    graph = viper_reduce(graph, _reduce_sum, {}, mode="tree_n", n_batch=3)
+    assert processes_with_mpi(graph, {"use_cloudpickle": False}) == 15
+
+
+def test_processes_with_mpi_task_priorities_forces_chunksize_one(monkeypatch):
+    """chunksize>1 with priorities would hand each worker a consecutive block
+    of the priority order (defeating the interleaving) -> forced to 1."""
+    _, _, futures = install_fake_mpi(monkeypatch, world_size=2)
+    graph = build_map_graph([1, 2, 3])
+    graph["map"]["task_priorities"] = [0, -1, -2]
+    result = processes_with_mpi(graph, {"use_cloudpickle": False, "chunksize": 8})
+    assert result == [1, 2, 3]
+    assert futures.constructed[0].last_chunksize == 1

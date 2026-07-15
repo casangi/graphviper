@@ -235,3 +235,113 @@ def test_generate_dask_workflow_unknown_reduce_mode_falls_through():
 
     results = dask.compute(dask_graph)[0]
     assert list(results) == [5, 6]
+
+
+# --------------------------------------------------------------------------- #
+# task_priorities -> per-node dask ``priority`` annotations
+# --------------------------------------------------------------------------- #
+def _node_priority(node):
+    """The dask ``priority`` annotation on a delayed node's own layers, else None."""
+    for layer in node.__dask_graph__().layers.values():
+        if layer.annotations and "priority" in layer.annotations:
+            return layer.annotations["priority"]
+    return None
+
+
+def test_generate_dask_workflow_priority_annotations():
+    """``task_priorities`` on the map layer become per-node ``priority``
+    annotations (a None entry stays unannotated) without changing results."""
+    graph = _map_v_graph([1, 2, 3])
+    graph["map"]["task_priorities"] = [0, None, -2]
+
+    nodes = generate_dask_workflow(graph)
+    assert [_node_priority(n) for n in nodes] == [0, None, -2]
+    assert list(dask.compute(nodes)[0]) == [1, 2, 3]
+
+
+def test_generate_dask_workflow_priority_annotations_load_graph():
+    """Priorities annotate map nodes on both load-graph paths: the
+    ``load_node_id == -1`` per-task fallback and the shared-load path (where
+    they merge with the ``viper_load_group``/``viper_map_pair`` annotations)."""
+    full = _make_full_xds()
+
+    def load_fn(load_params):
+        return {"xds_0": full}
+
+    def map_fn(input_params):
+        data = input_params["input_data"]
+        if data is None:
+            return "fallback"
+        return float(data["xds_0"]["vis"].values.sum())
+
+    viper_graph = {
+        "load": {
+            "node_task": load_fn,
+            "input_params": [{"marker": "load0"}],
+        },
+        "map": {
+            "node_task": map_fn,
+            "input_params": [
+                {"input_data": None, "tag": "boundary"},  # load_node_id == -1
+                {"tag": "in_chunk"},  # load_node_id == 0
+            ],
+            "load_node_ids": [-1, 0],
+            "relative_data_selections": [
+                None,
+                {"xds_0": {"frequency": slice(0, 2)}},
+            ],
+            "task_priorities": [-1, -7],
+        },
+    }
+
+    nodes = generate_dask_workflow(viper_graph)
+    assert [_node_priority(n) for n in nodes] == [-1, -7]
+    results = dask.compute(nodes)[0]
+    assert results[0] == "fallback"
+    assert results[1] == 1.0
+
+
+def test_generate_dask_workflow_load_node_inherits_max_task_priority():
+    """A load node inherits the HIGHEST priority of the map tasks it feeds, so
+    unannotated loads (default 0) cannot all outrank negatively-prioritized map
+    tasks and run first."""
+    full = _make_full_xds()
+
+    def load_fn(load_params):
+        return {"xds_0": full}
+
+    def map_fn(input_params):
+        return 1
+
+    viper_graph = {
+        "load": {
+            "node_task": load_fn,
+            "input_params": [{"marker": "load0"}],
+        },
+        "map": {
+            "node_task": map_fn,
+            "input_params": [{"tag": "a"}, {"tag": "b"}],
+            "load_node_ids": [0, 0],
+            "relative_data_selections": [
+                {"xds_0": {"frequency": slice(0, 2)}},
+                {"xds_0": {"frequency": slice(2, 4)}},
+            ],
+            "task_priorities": [-9, -4],
+        },
+    }
+
+    nodes = generate_dask_workflow(viper_graph)
+    # Map nodes carry their own priorities...
+    assert [_node_priority(n) for n in nodes] == [-9, -4]
+    # ...and every load-node layer (the load call and its function leaf, seen
+    # via both map nodes' graphs) carries max(-9, -4) = -4 -- never the
+    # default 0 that would let loads outrank all map tasks.
+    load_layer_priorities = [
+        layer.annotations.get("priority")
+        for n in nodes
+        for layer in n.__dask_graph__().layers.values()
+        if layer.annotations
+        and "viper_load_group" in layer.annotations
+        and "viper_map_pair" not in layer.annotations
+    ]
+    assert load_layer_priorities and set(load_layer_priorities) == {-4}
