@@ -256,7 +256,9 @@ def processes_with_mpi(viper_graph, cluster_setup=None):
     Returns
     -------
     object
-        The reduced result, or (no reduce stage) the list of map-task results.
+        The reduced result (further transformed by any appended post-reduce
+        nodes from :func:`graphviper.graph_tools.append`), or (no reduce
+        stage) the list of map-task results.
     """
     if cluster_setup is None:
         cluster_setup = {}
@@ -414,6 +416,19 @@ def processes_with_mpi(viper_graph, cluster_setup=None):
                     f"Unknown reduce mode {mode!r}; expected 'tree', 'tree_n', or "
                     "'single_node'."
                 )
+
+        # ---- APPEND (optional): post-reduce node(s), in call order ----------
+        # Mirrors the Dask backend: each appended step consumes the previous
+        # result. Runs on the manager by default; on the pool with
+        # reduce_in_pool (same switch as the reduce, same rationale).
+        if "append" in viper_graph:
+            for step in viper_graph["append"]:
+                if reduce_in_pool:
+                    result = executor.submit(
+                        step["node_task"], result, step["input_params"]
+                    ).result()
+                else:
+                    result = step["node_task"](result, step["input_params"])
 
     # Outside the with-block: the executor has shut down cleanly. The remaining
     # hang risk is the global worker-stop + MPI_Finalize at interpreter exit.

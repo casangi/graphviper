@@ -122,3 +122,21 @@ def test_airflow_dag_to_graphviz():
     assert "b" in src
     # edge a -> b present
     assert "a -> b" in src
+
+
+def test_generate_airflow_workflow_append_unsupported(tmp_path):
+    """The deprecated Airflow generator refuses graphs with an append stage."""
+    from graphviper.graph_tools.append import append as viper_append
+
+    viper_graph = _make_map_graph()
+    viper_graph["reduce"] = {
+        "mode": "single_node",
+        "input_params": {},
+        "node_task": reduce_task,
+    }
+    viper_append(viper_graph, reduce_task, {})
+
+    filename = str(tmp_path / "dag.py")
+    with pytest.raises(ValueError, match="append"):
+        generate_airflow_workflow(viper_graph, filename=filename)
+    assert not (tmp_path / "dag.py").exists()  # refused before writing

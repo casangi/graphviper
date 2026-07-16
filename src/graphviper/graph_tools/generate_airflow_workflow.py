@@ -44,6 +44,9 @@ def generate_airflow_workflow(
     ------
     AssertionError
         If a reduce stage is present with a ``mode`` other than ``"single_node"``.
+    ValueError
+        If the graph has an ``append`` stage
+        (:func:`graphviper.graph_tools.append` is not supported here).
     """
     warnings.warn(
         "generate_airflow_workflow is deprecated and will be removed in a "
@@ -52,6 +55,11 @@ def generate_airflow_workflow(
         DeprecationWarning,
         stacklevel=2,
     )
+    if "append" in viper_graph:
+        raise ValueError(
+            "generate_airflow_workflow does not support an 'append' stage; "
+            "use generate_dask_workflow or processes_with_mpi."
+        )
     import inspect
 
     map_node_task_str = inspect.getsource(viper_graph["map"]["node_task"]).replace(

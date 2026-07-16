@@ -110,8 +110,9 @@ def generate_dask_workflow(viper_graph):
     Returns
     -------
     list or dask.delayed
-        The list of ``dask.delayed`` map nodes, or a single reduced node when a
-        reduce stage is present.
+        The list of ``dask.delayed`` map nodes, or a single node when a reduce
+        stage is present (the reduced result, further wrapped by any appended
+        post-reduce nodes from :func:`graphviper.graph_tools.append`).
     """
 
     dask_graph = []
@@ -229,6 +230,14 @@ def generate_dask_workflow(viper_graph):
                 dask_graph,
                 viper_graph["reduce"]["node_task"],
                 viper_graph["reduce"]["input_params"],
+            )
+
+    # Appended post-reduce nodes (graph_tools.append): each step becomes one
+    # dask.delayed node downstream of the previous one, in call order.
+    if "append" in viper_graph:
+        for step in viper_graph["append"]:
+            dask_graph = dask.delayed(step["node_task"])(
+                dask_graph, step["input_params"]
             )
 
     return dask_graph

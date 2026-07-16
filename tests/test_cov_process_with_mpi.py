@@ -467,3 +467,43 @@ def test_processes_with_mpi_task_priorities_forces_chunksize_one(monkeypatch):
     result = processes_with_mpi(graph, {"use_cloudpickle": False, "chunksize": 8})
     assert result == [1, 2, 3]
     assert futures.constructed[0].last_chunksize == 1
+
+
+# --------------------------------------------------------------------------- #
+# append (post-reduce node) on the MPI backend
+# --------------------------------------------------------------------------- #
+def _append_scale(input_data, input_params):
+    return input_data * input_params["factor"]
+
+
+def _append_shift(input_data, input_params):
+    return input_data + input_params["shift"]
+
+
+def test_processes_with_mpi_append_manager_local(monkeypatch):
+    """Appended nodes run on the manager after the reduce (default
+    reduce_in_pool=False), chained in call order: (10 + 1) * 2 = 22."""
+    from graphviper.graph_tools.append import append as viper_append
+
+    install_fake_mpi(monkeypatch, world_size=2)
+    graph = build_map_graph([1, 2, 3, 4])
+    graph = viper_reduce(graph, _reduce_sum, {}, mode="tree")
+    viper_append(graph, _append_shift, {"shift": 1})
+    viper_append(graph, _append_scale, {"factor": 2})
+
+    assert processes_with_mpi(graph, {"use_cloudpickle": False}) == 22
+
+
+def test_processes_with_mpi_append_in_pool(monkeypatch):
+    """With reduce_in_pool=True the appended node is executor.submit()ted."""
+    from graphviper.graph_tools.append import append as viper_append
+
+    _, _, futures = install_fake_mpi(monkeypatch, world_size=2)
+    graph = build_map_graph([1, 2, 3, 4])
+    graph = viper_reduce(graph, _reduce_sum, {}, mode="single_node")
+    viper_append(graph, _append_scale, {"factor": 10})
+
+    result = processes_with_mpi(
+        graph, {"use_cloudpickle": False, "reduce_in_pool": True}
+    )
+    assert result == 100
