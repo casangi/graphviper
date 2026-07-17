@@ -99,7 +99,7 @@ def map(
     data_loading_task: Union[Callable[..., Any], None] = None,
     disk_chunk_sizes: Union[Dict[str, int], None] = None,
     load_node_input_params: Union[dict, None] = None,
-    previous: None = None
+    previous: None = None,
 ) -> Dict:
     """Create a perfectly parallel graph where a node is generated for each item in the :ref:`node_task_data_mapping <node task data mapping>` using the function specified in the ``node_task`` parameter.
 

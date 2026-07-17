@@ -14,7 +14,9 @@ def make_time_coord(
     time_start: str = "2019-10-03T19:00:00.000",
     time_delta: numbers.Number = 3600,
     n_samples: int = 10,
-    time_scale: Literal["tai", "tcb", "tcg", "tdb", "tt", "ut1", "utc", "local"] = "utc",
+    time_scale: Literal[
+        "tai", "tcb", "tcg", "tdb", "tt", "ut1", "utc", "local"
+    ] = "utc",
 ) -> Dict:
     """Convenience function that creates a time coordinate `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ that can be used to create :ref:`parallel_coords <parallel coords>` using :func:`make_parallel_coord` function.
 
@@ -185,9 +187,7 @@ def make_parallel_coord(
             data="array"
         )  # Deep copy so that we don't accidentally modify the xr.core.dataarray.DataArray.
 
-    parallel_coord = {
-        "data": coord["data"]
-    }
+    parallel_coord = {"data": coord["data"]}
 
     if gap is None and n_chunks is not None:
         parallel_coord["data_chunks"] = _array_split(coord["data"], n_chunks)
@@ -464,7 +464,17 @@ def _nearest_interp_indices(
 def interpolate_data_coords_onto_parallel_coords(
     parallel_coords: dict,
     input_data: Union[Dict, xr.DataTree],
-    interpolation_method: Literal["linear", "nearest", "nearest-up", "zero", "slinear", "quadratic", "cubic", "previous", "next"] = "nearest",
+    interpolation_method: Literal[
+        "linear",
+        "nearest",
+        "nearest-up",
+        "zero",
+        "slinear",
+        "quadratic",
+        "cubic",
+        "previous",
+        "next",
+    ] = "nearest",
     assume_sorted: bool = True,
     ps_partition: Optional[list[str]] = None,
 ) -> Dict:
@@ -668,9 +678,9 @@ def interpolate_data_coords_onto_parallel_coords(
             task_coords = {}
             for i_dim, dim in enumerate(parallel_dims):
                 chunk_coords = {
-                    "data": parallel_coords[dim]["data_chunks"][
-                    chunk_indices[i_dim]],
-                    "dims": parallel_coords[dim]["dims"], "attrs": parallel_coords[dim]["attrs"]
+                    "data": parallel_coords[dim]["data_chunks"][chunk_indices[i_dim]],
+                    "dims": parallel_coords[dim]["dims"],
+                    "attrs": parallel_coords[dim]["attrs"],
                 }
 
                 if "data_chunk_slices" in parallel_coords[dim]:
