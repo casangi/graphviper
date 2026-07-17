@@ -3,9 +3,10 @@ import numbers
 
 import numpy as np
 import xarray as xr
+
 import toolviper.utils.logger as logger
 
-from typing import Dict, Union, Optional, Hashable
+from typing import Dict, Union, Optional, Hashable, Literal
 from scipy.interpolate import interp1d
 
 
@@ -13,7 +14,7 @@ def make_time_coord(
     time_start: str = "2019-10-03T19:00:00.000",
     time_delta: numbers.Number = 3600,
     n_samples: int = 10,
-    time_scale: {"tai", "tcb", "tcg", "tdb", "tt", "ut1", "utc", "local"} = "utc",
+    time_scale: Literal["tai", "tcb", "tcg", "tdb", "tt", "ut1", "utc", "local"] = "utc",
 ) -> Dict:
     """Convenience function that creates a time coordinate `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ that can be used to create :ref:`parallel_coords <parallel coords>` using :func:`make_parallel_coord` function.
 
@@ -76,7 +77,7 @@ def make_frequency_coord(
     freq_start: numbers.Number = 3 * 10**9,
     freq_delta: numbers.Number = 0.4 * 10**9,
     n_channels: int = 50,
-    velocity_frame: {"gcrs", "icrs", "hcrs", "lsrk", "lsrd", "lsr"} = "lsrk",
+    velocity_frame: Literal["gcrs", "icrs", "hcrs", "lsrk", "lsrd", "lsr"] = "lsrk",
 ) -> Dict:
     """Convenience function that creates a frequency coordinate `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ that can be used to create :ref:`parallel_coords <parallel coords>` using :func:`make_parallel_coord` function.
 
@@ -184,8 +185,10 @@ def make_parallel_coord(
             data="array"
         )  # Deep copy so that we don't accidentally modify the xr.core.dataarray.DataArray.
 
-    parallel_coord = {}
-    parallel_coord["data"] = coord["data"]
+    parallel_coord = {
+        "data": coord["data"]
+    }
+
     if gap is None and n_chunks is not None:
         parallel_coord["data_chunks"] = _array_split(coord["data"], n_chunks)
         parallel_coord["data_chunks_edges"] = _array_split_edges(
@@ -198,6 +201,7 @@ def make_parallel_coord(
         coord_data = coord["data"]
         if len(coord_data.shape) > 1:
             raise ValueError("Can only split one-dimensional array")
+
         nx = len(coord_data)
         dxs = coord_data[1:] - coord_data[:-1]
         jumps0 = np.argwhere(dxs > gap).flatten()
@@ -222,7 +226,7 @@ def make_parallel_coord(
 
 
 def make_parallel_coord_by_gap(coord: Union[Dict, xr.DataArray], gap: float) -> Dict:
-    """Creates a single parallel coordinate from from a `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ or a `xarray.DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_ with `measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_.
+    """Creates a single parallel coordinate from a `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ or a `xarray.DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_ with `measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_.
 
     This function only returns a single :ref:`parallel_coord <parallel coord>`; to create :ref:`parallel_coords <parallel coords>` a dictionary must be created where the keys are the dimension coordinate names and the values are the respective :ref:`parallel_coord <parallel coord>`.
 
@@ -235,6 +239,7 @@ def make_parallel_coord_by_gap(coord: Union[Dict, xr.DataArray], gap: float) -> 
     """
     if isinstance(coord, xr.core.dataarray.DataArray):
         coord = coord.copy(deep=True).to_dict()
+
     parallel_coord = {}
     coord_data = np.array(coord["data"])
     if len(coord_data.shape) > 1:
@@ -364,7 +369,7 @@ def _make_iter_chunks_indices(parallel_coords: Dict):
 
 
 def _partition_ps_by_non_dimensions(ps, ps_partition_keys):
-    "This requires at least one member of ps_partition_keys!"
+    """This requires at least one member of ps_partition_keys!"""
     ps_split_map = {}
     for name, xds in ps.items():
         partition_info = xds.xr_ms.get_partition_info()
@@ -446,7 +451,7 @@ def _nearest_interp_indices(
     right_dist = np.abs(coord_values[rc] - query)
     left_dist = np.abs(coord_values[lc] - query)
 
-    # Prefer the left neighbour on an exact tie (consistent with floor behaviour)
+    # Prefer the left neighbor on an exact tie (consistent with floor behaviour)
     interp_index = np.where(left_dist <= right_dist, lc, rc).astype(int)
 
     # Apply fill_value=-1 for strictly out-of-bounds queries
@@ -459,17 +464,7 @@ def _nearest_interp_indices(
 def interpolate_data_coords_onto_parallel_coords(
     parallel_coords: dict,
     input_data: Union[Dict, xr.DataTree],
-    interpolation_method: {
-        "linear",
-        "nearest",
-        "nearest-up",
-        "zero",
-        "slinear",
-        "quadratic",
-        "cubic",
-        "previous",
-        "next",
-    } = "nearest",
+    interpolation_method: Literal["linear", "nearest", "nearest-up", "zero", "slinear", "quadratic", "cubic", "previous", "next"] = "nearest",
     assume_sorted: bool = True,
     ps_partition: Optional[list[str]] = None,
 ) -> Dict:
@@ -479,11 +474,11 @@ def interpolate_data_coords_onto_parallel_coords(
     ----------
     parallel_coords : Dict
         The parallel coordinates determine the parallelism of the map graph.
-        The keys in the parallel coordinates can by any combination of the dimension coordinates in the input data.
+        The keys in the parallel coordinates can be any combination of the dimension coordinates in the input data.
         See notes in docstring for structure.
     input_data : Union[Dict, ProcessingSet]
         Can either be a `ProcessingSet <https://github.com/casangi/xradio/blob/main/src/xradio/correlated_data/processing_set.py>`_ or a Dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_. Only coordinates are needed so no actual data is loaded into memory.
-    interpolation_method :  {"linear", "nearest", "nearest-up", "zero", "slinear", "quadratic", "cubic", "previous", "next",}, optional
+    interpolation_method: {"linear", "nearest", "nearest-up", "zero", "slinear", "quadratic", "cubic", "previous", "next",}, optional
         The kind of interpolation method to use as described in `Scipy documentation <https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interp1d.html>`_ , by default ``nearest``.
     assume_sorted : bool, optional
         Are the data in parallel_coords and input_data monotonically increasing in value, by default True.
@@ -672,12 +667,12 @@ def interpolate_data_coords_onto_parallel_coords(
 
             task_coords = {}
             for i_dim, dim in enumerate(parallel_dims):
-                chunk_coords = {}
-                chunk_coords["data"] = parallel_coords[dim]["data_chunks"][
-                    chunk_indices[i_dim]
-                ]
-                chunk_coords["dims"] = parallel_coords[dim]["dims"]
-                chunk_coords["attrs"] = parallel_coords[dim]["attrs"]
+                chunk_coords = {
+                    "data": parallel_coords[dim]["data_chunks"][
+                    chunk_indices[i_dim]],
+                    "dims": parallel_coords[dim]["dims"], "attrs": parallel_coords[dim]["attrs"]
+                }
+
                 if "data_chunk_slices" in parallel_coords[dim]:
                     chunk_coords["slice"] = parallel_coords[dim]["data_chunk_slices"][
                         chunk_indices[i_dim]

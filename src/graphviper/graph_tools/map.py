@@ -1,17 +1,17 @@
-import os
-import math
-import dask
+import copy
 import datetime
 import functools
 import inspect
+import math
+import os
+
+from typing import Callable, Any, Dict
+from typing import Union
 
 import numpy as np
-import toolviper.utils.logger as logger
-
-from typing import Dict, Union
-from typing import Callable, Any, Tuple, Dict
 import xarray as xr
-import copy
+
+import toolviper.utils.logger as logger
 
 
 def make_graph_node_task(node_task: Callable) -> Callable:
@@ -68,7 +68,7 @@ def make_graph_node_task(node_task: Callable) -> Callable:
 
     @functools.wraps(node_task)
     def wrap(input_params):
-        # Pin the mmap threshold BEFORE any large allocations so they use mmap and
+        # Pin the mmap threshold BEFORE any large allocations, so they use mmap and
         # are returned to the OS immediately on free (no heap fragmentation). Must
         # run at the start of the task, not after, or fragmentation is already done.
         from toolviper.utils.memory_management import memory_setup, free_memory
@@ -95,10 +95,11 @@ def map(
     input_params: dict,
     in_memory_compute: bool = False,
     client=None,
-    date_time: str = None,
+    date_time: str | None = None,
     data_loading_task: Union[Callable[..., Any], None] = None,
     disk_chunk_sizes: Union[Dict[str, int], None] = None,
     load_node_input_params: Union[dict, None] = None,
+    previous: None = None
 ) -> Dict:
     """Create a perfectly parallel graph where a node is generated for each item in the :ref:`node_task_data_mapping <node task data mapping>` using the function specified in the ``node_task`` parameter.
 
@@ -161,6 +162,14 @@ def map(
             ps = input_params["input_data"]
 
     , where ``load_data`` is appropriate function for your data.
+
+    Args:
+        data_loading_task:
+        data_loading_task:
+        load_node_input_params:
+        load_node_input_params:
+        disk_chunk_sizes:
+        data_loading_task:
 
     """
     n_tasks = len(node_task_data_mapping)

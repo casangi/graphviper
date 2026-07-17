@@ -1,15 +1,14 @@
-import dask
 from typing import Callable, Any
-from typing import Dict, List
+from typing import Dict, Literal
 
 
 def reduce(
     graph: Dict,
     reduce_node_task: Callable[..., Any],
     input_params: Dict,
-    mode: {"tree", "single_node"} = "tree",
+    mode: Literal["tree", "single_node"] = "tree",
 ) -> Dict:
-    """Appends a reduce step to the graph created by the :func:`graphviper.graph_tools.map`. function.
+    """Appends a reduction step to the graph created by the :func:`graphviper.graph_tools.map`. function.
 
     Parameters
     ----------
