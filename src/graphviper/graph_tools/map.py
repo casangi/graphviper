@@ -193,7 +193,9 @@ def map(
     # Create a node in Dask graph for each task_id in node_task_data_mapping
     for task_id, node_task_parameters in node_task_data_mapping.items():
         # logger.debug('Task id: ' + str(task_id) + ", " + str(node_task_parameters.keys()))
-        logger.debug("Task id: " + str(task_id) + ", " + str(node_task_parameters.keys()))
+        logger.debug(
+            "Task id: " + str(task_id) + ", " + str(node_task_parameters.keys())
+        )
         input_params.update(node_task_parameters)
         input_params["task_id"] = task_id
 
