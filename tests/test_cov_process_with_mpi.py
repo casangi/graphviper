@@ -55,7 +55,14 @@ class FakeExecutor:
         return [fn(x) for x in iterable]
 
     def submit(self, fn, *args):
-        return FakeFuture(fn(*args))
+        # A REAL concurrent.futures.Future (resolved eagerly) rather than
+        # FakeFuture: the streaming-reduce path iterates futures via
+        # concurrent.futures.as_completed, which requires the real class.
+        import concurrent.futures
+
+        fut = concurrent.futures.Future()
+        fut.set_result(fn(*args))
+        return fut
 
 
 class FakePickle:
@@ -507,3 +514,99 @@ def test_processes_with_mpi_append_in_pool(monkeypatch):
         graph, {"use_cloudpickle": False, "reduce_in_pool": True}
     )
     assert result == 100
+
+
+# --------------------------------------------------------------------------- #
+# _StreamingTreeReducer + reduce_streaming (completion-order streaming reduce)
+# --------------------------------------------------------------------------- #
+def test_streaming_tree_reducer_folds_incrementally():
+    from graphviper.graph_tools.process_with_mpi import _StreamingTreeReducer
+
+    red = _StreamingTreeReducer(_reduce_sum, {}, n_batch=4)
+    for v in range(1, 101):
+        red.push(v)
+    # The cascade folds while pushing: level 0 alone folds 25 batches of 4.
+    assert red.n_reduce_calls >= 25
+    assert red.finalize() == 5050
+
+
+def test_streaming_tree_reducer_edge_cases():
+    import pytest
+
+    from graphviper.graph_tools.process_with_mpi import _StreamingTreeReducer
+
+    red = _StreamingTreeReducer(_reduce_sum, {}, n_batch=4)
+    red.push(7)
+    assert red.finalize() == 7  # single item passes through unreduced
+    with pytest.raises(ValueError):
+        _StreamingTreeReducer(_reduce_sum, {}, 4).finalize()
+    # n_batch < 2 is clamped like the tree helpers
+    assert _StreamingTreeReducer(_reduce_sum, {}, 0).n_batch == 2
+
+
+def test_processes_with_mpi_reduce_streaming(monkeypatch):
+    install_fake_mpi(monkeypatch, world_size=2)
+    graph = build_map_graph(list(range(1, 24)))
+    graph = viper_reduce(graph, _reduce_sum, {}, mode="tree_n", n_batch=4)
+    assert (
+        processes_with_mpi(
+            graph, {"use_cloudpickle": False, "reduce_streaming": True}
+        )
+        == 276
+    )
+
+
+def test_reduce_streaming_matches_buffered(monkeypatch):
+    install_fake_mpi(monkeypatch, world_size=2)
+    for mode, kw in (("tree", {}), ("tree_n", {"n_batch": 3})):
+        graph = build_map_graph(list(range(1, 18)))
+        graph = viper_reduce(graph, _reduce_sum, {}, mode=mode, **kw)
+        buffered = processes_with_mpi(graph, {"use_cloudpickle": False})
+        streamed = processes_with_mpi(
+            graph, {"use_cloudpickle": False, "reduce_streaming": True}
+        )
+        assert streamed == buffered == 153
+
+
+def test_reduce_streaming_falls_back_with_reduce_in_pool(monkeypatch):
+    # Incompatible combo: warns and uses the buffered pool reduce -- result identical.
+    install_fake_mpi(monkeypatch, world_size=2)
+    graph = build_map_graph([1, 2, 3, 4, 5])
+    graph = viper_reduce(graph, _reduce_sum, {}, mode="tree")
+    assert (
+        processes_with_mpi(
+            graph,
+            {"use_cloudpickle": False, "reduce_streaming": True,
+             "reduce_in_pool": True},
+        )
+        == 15
+    )
+
+
+def test_reduce_streaming_ignores_chunksize_and_logs_progress(monkeypatch):
+    install_fake_mpi(monkeypatch, world_size=2)
+    graph = build_map_graph(list(range(1, 12)))
+    graph = viper_reduce(graph, _reduce_sum, {}, mode="tree_n", n_batch=4)
+    assert (
+        processes_with_mpi(
+            graph,
+            {"use_cloudpickle": False, "reduce_streaming": True,
+             "chunksize": 8, "progress_every": 3},
+        )
+        == 66
+    )
+
+
+def test_reduce_streaming_with_task_priorities(monkeypatch):
+    # Priorities permute the SUBMIT order; streaming reduces in completion
+    # order, so the sum is unaffected and chunksize is forced to 1 upstream.
+    install_fake_mpi(monkeypatch, world_size=2)
+    graph = build_map_graph(list(range(1, 10)))
+    graph["map"]["task_priorities"] = list(range(9))  # reverse the start order
+    graph = viper_reduce(graph, _reduce_sum, {}, mode="tree_n", n_batch=4)
+    assert (
+        processes_with_mpi(
+            graph, {"use_cloudpickle": False, "reduce_streaming": True}
+        )
+        == 45
+    )

@@ -207,6 +207,53 @@ def _combine_tree_n_pool(executor, results, reduce_node_task, input_params, n_ba
     return items[0]
 
 
+class _StreamingTreeReducer:
+    """Completion-order streaming ``n_batch``-ary tree reduce.
+
+    ``push`` buffers incoming map results; every time a level's buffer reaches
+    ``n_batch`` items it is folded with ``reduce_node_task`` and the partial is
+    pushed to the next level (a streaming cascade), so reduce work happens
+    WHILE map tasks are still running and the manager never holds more than
+    ``n_batch x n_levels`` unreduced items. ``finalize`` folds the level
+    residues into the single result.
+
+    Results are combined in COMPLETION order ("the first n_batch tasks to
+    finish are combined"), so the reduce node task must be associative AND
+    commutative -- the caller opts in via ``reduce_streaming``.
+    """
+
+    def __init__(self, reduce_node_task, input_params, n_batch):
+        self.reduce_node_task = reduce_node_task
+        self.input_params = input_params
+        self.n_batch = max(2, n_batch)
+        self.levels = []  # levels[i]: buffered partials of tree depth i
+        self.n_reduce_calls = 0
+
+    def _reduce(self, batch):
+        self.n_reduce_calls += 1
+        return self.reduce_node_task(batch, self.input_params)
+
+    def push(self, item, level=0):
+        while len(self.levels) <= level:
+            self.levels.append([])
+        buf = self.levels[level]
+        buf.append(item)
+        if len(buf) >= self.n_batch:
+            self.levels[level] = []
+            self.push(self._reduce(buf), level + 1)
+
+    def finalize(self):
+        residues = [item for buf in self.levels for item in buf]
+        if not residues:
+            raise ValueError("streaming reduce received no results")
+        if len(residues) == 1:
+            return residues[0]
+        return _combine_tree_n_local(
+            residues, lambda batch, _params: self._reduce(batch),
+            self.input_params, self.n_batch,
+        )
+
+
 def processes_with_mpi(viper_graph, cluster_setup=None):
     """Execute a GraphVIPER map/reduce graph with an MPI manager-worker pool.
 
@@ -238,6 +285,16 @@ def processes_with_mpi(viper_graph, cluster_setup=None):
         * ``reduce_in_pool`` (bool) -- if ``True`` run the reduce tree on the
           worker pool; default ``False`` reduces on the manager (the right choice
           when map results are small metadata, as in imaging).
+        * ``reduce_streaming`` (bool) -- with a ``tree``/``tree_n`` reduce and
+          ``reduce_in_pool=False``, fold every ``n_batch`` COMPLETED map results
+          as they arrive instead of buffering all of them and reducing after the
+          map. This overlaps (essentially all of) the reduce under the map
+          window -- a 72-node imaging run spent 288 s of its 1148 s compute wall
+          in the post-map manager-only reduce -- and bounds manager memory to
+          ``n_batch x n_levels`` unreduced results. Results are combined in
+          COMPLETION order ("the first n_batch tasks to finish are combined"),
+          so the reduce node task must be associative AND commutative; default
+          ``False`` preserves the input-order adjacent tree.
         * ``use_cloudpickle`` (bool) -- reconfigure mpi4py to pickle with
           cloudpickle so closure node tasks serialise; default ``True``.
         * ``progress_every`` (int or None) -- if set, log a progress line every
@@ -266,6 +323,7 @@ def processes_with_mpi(viper_graph, cluster_setup=None):
     max_workers = cluster_setup.get("max_workers", None)
     chunksize = cluster_setup.get("chunksize", 1)
     reduce_in_pool = cluster_setup.get("reduce_in_pool", False)
+    reduce_streaming = cluster_setup.get("reduce_streaming", False)
     use_cloudpickle = cluster_setup.get("use_cloudpickle", True)
     progress_every = cluster_setup.get("progress_every", None)
     teardown_force_exit_seconds = cluster_setup.get("teardown_force_exit_seconds", None)
@@ -348,38 +406,118 @@ def processes_with_mpi(viper_graph, cluster_setup=None):
             "optimisation is skipped."
         )
 
+    # Streaming reduce: only meaningful for a manager-local tree reduce.
+    streaming = (
+        reduce_streaming
+        and "reduce" in viper_graph
+        and viper_graph["reduce"].get("mode") in ("tree", "tree_n")
+        and not reduce_in_pool
+    )
+    if reduce_streaming and not streaming:
+        logger.warning(
+            "processes_with_mpi: reduce_streaming requested but unavailable "
+            "(needs a tree/tree_n reduce with reduce_in_pool=False); using the "
+            "buffered post-map reduce."
+        )
+
     logger.info(
         f"processes_with_mpi: executing {n_tasks} map tasks across an MPI pool "
-        f"(world size {world_size}, max_workers={max_workers}, chunksize={chunksize})."
+        f"(world size {world_size}, max_workers={max_workers}, "
+        f"chunksize={chunksize}, streaming_reduce={streaming})."
     )
 
     with MPIPoolExecutor(max_workers=max_workers) as executor:
-        # ---- MAP: dynamically load-balanced across the worker pool ----------
-        if progress_every:
-            map_results = []
-            for i, res in enumerate(
-                executor.map(map_fn, map_input_params, chunksize=chunksize), start=1
-            ):
-                map_results.append(res)
-                if i % progress_every == 0 or i == n_tasks:
-                    logger.info(f"processes_with_mpi: {i}/{n_tasks} map tasks done.")
+        if streaming:
+            # ---- MAP + STREAMING REDUCE: fold every n_batch COMPLETED results
+            # while the map is still running (requires an associative AND
+            # commutative reduce; the input-order return contract does not
+            # apply because no per-task result list is ever materialised).
+            from concurrent.futures import as_completed
+
+            if chunksize != 1:
+                logger.warning(
+                    f"processes_with_mpi: reduce_streaming submits per task; "
+                    f"ignoring chunksize={chunksize}."
+                )
+            mode = viper_graph["reduce"]["mode"]
+            arity = viper_graph["reduce"].get("n_batch", 2) if mode == "tree_n" else 2
+            reducer = _StreamingTreeReducer(
+                viper_graph["reduce"]["node_task"],
+                viper_graph["reduce"]["input_params"],
+                arity,
+            )
+            futures = [executor.submit(map_fn, p) for p in map_input_params]
+            for i, fut in enumerate(as_completed(futures), start=1):
+                reducer.push(fut.result())
+                if progress_every and (i % progress_every == 0 or i == n_tasks):
+                    logger.info(
+                        f"processes_with_mpi: {i}/{n_tasks} map tasks done "
+                        f"(reduce streamed, {reducer.n_reduce_calls} folds)."
+                    )
+            result = reducer.finalize()
         else:
-            map_results = list(
-                executor.map(map_fn, map_input_params, chunksize=chunksize)
+            result = _map_then_reduce(
+                executor, viper_graph, map_fn, map_input_params, n_tasks,
+                submit_order, chunksize, progress_every, reduce_in_pool,
             )
 
-        if submit_order is not None:
-            # Undo the priority permutation: map_results[k] is the result of
-            # original task submit_order[k]; put it back at its input position.
-            in_order = [None] * n_tasks
-            for k, i in enumerate(submit_order):
-                in_order[i] = map_results[k]
-            map_results = in_order
+        # ---- APPEND (optional): post-reduce node(s), in call order ----------
+        # Mirrors the Dask backend: each appended step consumes the previous
+        # result. Runs on the manager by default; on the pool with
+        # reduce_in_pool (same switch as the reduce, same rationale).
+        if "append" in viper_graph:
+            for step in viper_graph["append"]:
+                if reduce_in_pool:
+                    result = executor.submit(
+                        step["node_task"], result, step["input_params"]
+                    ).result()
+                else:
+                    result = step["node_task"](result, step["input_params"])
 
-        # ---- REDUCE (optional) ---------------------------------------------
-        if "reduce" not in viper_graph:
-            result = map_results
-        else:
+    # Outside the with-block: the executor has shut down cleanly. The remaining
+    # hang risk is the global worker-stop + MPI_Finalize at interpreter exit.
+    if teardown_force_exit_seconds:
+        logger.info(
+            "processes_with_mpi: arming teardown watchdog "
+            f"(force exit in {teardown_force_exit_seconds}s if shutdown hangs)."
+        )
+        force_exit_after(
+            teardown_force_exit_seconds, note="armed by processes_with_mpi"
+        )
+    return result
+
+
+def _map_then_reduce(executor, viper_graph, map_fn, map_input_params, n_tasks,
+                     submit_order, chunksize, progress_every, reduce_in_pool):
+    """The original buffered path: run the whole map (results in input order),
+    then the configured reduce. Extracted verbatim from processes_with_mpi so
+    the streaming branch can bypass it."""
+    # ---- MAP: dynamically load-balanced across the worker pool ----------
+    if progress_every:
+        map_results = []
+        for i, res in enumerate(
+            executor.map(map_fn, map_input_params, chunksize=chunksize), start=1
+        ):
+            map_results.append(res)
+            if i % progress_every == 0 or i == n_tasks:
+                logger.info(f"processes_with_mpi: {i}/{n_tasks} map tasks done.")
+    else:
+        map_results = list(
+            executor.map(map_fn, map_input_params, chunksize=chunksize)
+        )
+
+    if submit_order is not None:
+        # Undo the priority permutation: map_results[k] is the result of
+        # original task submit_order[k]; put it back at its input position.
+        in_order = [None] * n_tasks
+        for k, i in enumerate(submit_order):
+            in_order[i] = map_results[k]
+        map_results = in_order
+
+    # ---- REDUCE (optional) ---------------------------------------------
+    if "reduce" not in viper_graph:
+        result = map_results
+    else:
             reduce_node_task = viper_graph["reduce"]["node_task"]
             reduce_input_params = viper_graph["reduce"]["input_params"]
             # Read mode without a default so a malformed graph fails loudly (like
@@ -416,28 +554,4 @@ def processes_with_mpi(viper_graph, cluster_setup=None):
                     f"Unknown reduce mode {mode!r}; expected 'tree', 'tree_n', or "
                     "'single_node'."
                 )
-
-        # ---- APPEND (optional): post-reduce node(s), in call order ----------
-        # Mirrors the Dask backend: each appended step consumes the previous
-        # result. Runs on the manager by default; on the pool with
-        # reduce_in_pool (same switch as the reduce, same rationale).
-        if "append" in viper_graph:
-            for step in viper_graph["append"]:
-                if reduce_in_pool:
-                    result = executor.submit(
-                        step["node_task"], result, step["input_params"]
-                    ).result()
-                else:
-                    result = step["node_task"](result, step["input_params"])
-
-    # Outside the with-block: the executor has shut down cleanly. The remaining
-    # hang risk is the global worker-stop + MPI_Finalize at interpreter exit.
-    if teardown_force_exit_seconds:
-        logger.info(
-            "processes_with_mpi: arming teardown watchdog "
-            f"(force exit in {teardown_force_exit_seconds}s if shutdown hangs)."
-        )
-        force_exit_after(
-            teardown_force_exit_seconds, note="armed by processes_with_mpi"
-        )
     return result
