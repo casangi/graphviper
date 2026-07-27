@@ -249,8 +249,10 @@ class _StreamingTreeReducer:
         if len(residues) == 1:
             return residues[0]
         return _combine_tree_n_local(
-            residues, lambda batch, _params: self._reduce(batch),
-            self.input_params, self.n_batch,
+            residues,
+            lambda batch, _params: self._reduce(batch),
+            self.input_params,
+            self.n_batch,
         )
 
 
@@ -457,8 +459,15 @@ def processes_with_mpi(viper_graph, cluster_setup=None):
             result = reducer.finalize()
         else:
             result = _map_then_reduce(
-                executor, viper_graph, map_fn, map_input_params, n_tasks,
-                submit_order, chunksize, progress_every, reduce_in_pool,
+                executor,
+                viper_graph,
+                map_fn,
+                map_input_params,
+                n_tasks,
+                submit_order,
+                chunksize,
+                progress_every,
+                reduce_in_pool,
             )
 
         # ---- APPEND (optional): post-reduce node(s), in call order ----------
@@ -487,8 +496,17 @@ def processes_with_mpi(viper_graph, cluster_setup=None):
     return result
 
 
-def _map_then_reduce(executor, viper_graph, map_fn, map_input_params, n_tasks,
-                     submit_order, chunksize, progress_every, reduce_in_pool):
+def _map_then_reduce(
+    executor,
+    viper_graph,
+    map_fn,
+    map_input_params,
+    n_tasks,
+    submit_order,
+    chunksize,
+    progress_every,
+    reduce_in_pool,
+):
     """The original buffered path: run the whole map (results in input order),
     then the configured reduce. Extracted verbatim from processes_with_mpi so
     the streaming branch can bypass it."""
@@ -502,9 +520,7 @@ def _map_then_reduce(executor, viper_graph, map_fn, map_input_params, n_tasks,
             if i % progress_every == 0 or i == n_tasks:
                 logger.info(f"processes_with_mpi: {i}/{n_tasks} map tasks done.")
     else:
-        map_results = list(
-            executor.map(map_fn, map_input_params, chunksize=chunksize)
-        )
+        map_results = list(executor.map(map_fn, map_input_params, chunksize=chunksize))
 
     if submit_order is not None:
         # Undo the priority permutation: map_results[k] is the result of
@@ -518,40 +534,40 @@ def _map_then_reduce(executor, viper_graph, map_fn, map_input_params, n_tasks,
     if "reduce" not in viper_graph:
         result = map_results
     else:
-            reduce_node_task = viper_graph["reduce"]["node_task"]
-            reduce_input_params = viper_graph["reduce"]["input_params"]
-            # Read mode without a default so a malformed graph fails loudly (like
-            # the Dask backend, which indexes ["mode"]) instead of silently
-            # tree-reducing.
-            mode = viper_graph["reduce"]["mode"]
-            n_batch = viper_graph["reduce"].get("n_batch", 2)
+        reduce_node_task = viper_graph["reduce"]["node_task"]
+        reduce_input_params = viper_graph["reduce"]["input_params"]
+        # Read mode without a default so a malformed graph fails loudly (like
+        # the Dask backend, which indexes ["mode"]) instead of silently
+        # tree-reducing.
+        mode = viper_graph["reduce"]["mode"]
+        n_batch = viper_graph["reduce"].get("n_batch", 2)
 
-            if mode == "single_node":
-                # All map outputs combined by one reduce call.
-                if reduce_in_pool:
-                    result = executor.submit(
-                        reduce_node_task, map_results, reduce_input_params
-                    ).result()
-                else:
-                    result = reduce_node_task(map_results, reduce_input_params)
-            elif mode in ("tree", "tree_n"):
-                # "tree" == tree_n with n_batch=2 (binary).
-                arity = n_batch if mode == "tree_n" else 2
-                if reduce_in_pool:
-                    result = _combine_tree_n_pool(
-                        executor,
-                        map_results,
-                        reduce_node_task,
-                        reduce_input_params,
-                        arity,
-                    )
-                else:
-                    result = _combine_tree_n_local(
-                        map_results, reduce_node_task, reduce_input_params, arity
-                    )
+        if mode == "single_node":
+            # All map outputs combined by one reduce call.
+            if reduce_in_pool:
+                result = executor.submit(
+                    reduce_node_task, map_results, reduce_input_params
+                ).result()
             else:
-                raise ValueError(
-                    f"Unknown reduce mode {mode!r}; expected 'tree', 'tree_n', or "
-                    "'single_node'."
+                result = reduce_node_task(map_results, reduce_input_params)
+        elif mode in ("tree", "tree_n"):
+            # "tree" == tree_n with n_batch=2 (binary).
+            arity = n_batch if mode == "tree_n" else 2
+            if reduce_in_pool:
+                result = _combine_tree_n_pool(
+                    executor,
+                    map_results,
+                    reduce_node_task,
+                    reduce_input_params,
+                    arity,
                 )
+            else:
+                result = _combine_tree_n_local(
+                    map_results, reduce_node_task, reduce_input_params, arity
+                )
+        else:
+            raise ValueError(
+                f"Unknown reduce mode {mode!r}; expected 'tree', 'tree_n', or "
+                "'single_node'."
+            )
     return result

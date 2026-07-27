@@ -549,9 +549,7 @@ def test_processes_with_mpi_reduce_streaming(monkeypatch):
     graph = build_map_graph(list(range(1, 24)))
     graph = viper_reduce(graph, _reduce_sum, {}, mode="tree_n", n_batch=4)
     assert (
-        processes_with_mpi(
-            graph, {"use_cloudpickle": False, "reduce_streaming": True}
-        )
+        processes_with_mpi(graph, {"use_cloudpickle": False, "reduce_streaming": True})
         == 276
     )
 
@@ -576,8 +574,11 @@ def test_reduce_streaming_falls_back_with_reduce_in_pool(monkeypatch):
     assert (
         processes_with_mpi(
             graph,
-            {"use_cloudpickle": False, "reduce_streaming": True,
-             "reduce_in_pool": True},
+            {
+                "use_cloudpickle": False,
+                "reduce_streaming": True,
+                "reduce_in_pool": True,
+            },
         )
         == 15
     )
@@ -590,8 +591,12 @@ def test_reduce_streaming_ignores_chunksize_and_logs_progress(monkeypatch):
     assert (
         processes_with_mpi(
             graph,
-            {"use_cloudpickle": False, "reduce_streaming": True,
-             "chunksize": 8, "progress_every": 3},
+            {
+                "use_cloudpickle": False,
+                "reduce_streaming": True,
+                "chunksize": 8,
+                "progress_every": 3,
+            },
         )
         == 66
     )
@@ -605,8 +610,6 @@ def test_reduce_streaming_with_task_priorities(monkeypatch):
     graph["map"]["task_priorities"] = list(range(9))  # reverse the start order
     graph = viper_reduce(graph, _reduce_sum, {}, mode="tree_n", n_batch=4)
     assert (
-        processes_with_mpi(
-            graph, {"use_cloudpickle": False, "reduce_streaming": True}
-        )
+        processes_with_mpi(graph, {"use_cloudpickle": False, "reduce_streaming": True})
         == 45
     )
