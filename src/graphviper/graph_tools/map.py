@@ -1,17 +1,16 @@
-import os
-import math
-import dask
+import copy
 import datetime
 import functools
 import inspect
+import math
+import os
+from collections.abc import Callable
+from typing import Any, Dict, Tuple, Union
 
+import dask
 import numpy as np
 import toolviper.utils.logger as logger
-
-from typing import Dict, Union
-from typing import Callable, Any, Tuple, Dict
 import xarray as xr
-import copy
 
 
 def make_graph_node_task(node_task: Callable) -> Callable:
@@ -71,7 +70,7 @@ def make_graph_node_task(node_task: Callable) -> Callable:
         # Pin the mmap threshold BEFORE any large allocations so they use mmap and
         # are returned to the OS immediately on free (no heap fragmentation). Must
         # run at the start of the task, not after, or fragmentation is already done.
-        from toolviper.utils.memory_management import memory_setup, free_memory
+        from toolviper.utils.memory_management import free_memory, memory_setup
 
         memory_setup(131072)
 
@@ -225,19 +224,19 @@ def monitor_node_task(node_task, interval):
 
 
 def map(
-    input_data: Union[Dict, xr.DataTree],
+    input_data: dict | xr.DataTree,
     node_task_data_mapping: dict,
     node_task: Callable[..., Any],
     input_params: dict,
     in_memory_compute: bool = False,
     client=None,
     date_time: str = None,
-    data_loading_task: Union[Callable[..., Any], None] = None,
-    disk_chunk_sizes: Union[Dict[str, int], None] = None,
-    load_node_input_params: Union[dict, None] = None,
-    monitor_resources_seconds: Union[float, None] = None,
-    task_priorities: Union[dict, None] = None,
-) -> Dict:
+    data_loading_task: Callable[..., Any] | None = None,
+    disk_chunk_sizes: dict[str, int] | None = None,
+    load_node_input_params: dict | None = None,
+    monitor_resources_seconds: float | None = None,
+    task_priorities: dict | None = None,
+) -> dict:
     """Create a perfectly parallel graph where a node is generated for each item in the :ref:`node_task_data_mapping <node task data mapping>` using the function specified in the ``node_task`` parameter.
 
     Parameters
@@ -415,7 +414,7 @@ def map(
 
 def _build_load_stage(
     input_param_list: list,
-    disk_chunk_sizes: Dict[str, int],
+    disk_chunk_sizes: dict[str, int],
     load_node_input_params: dict,
 ):
     """Groups mapping tasks by their native on-disk chunk and builds load node parameters.
@@ -450,7 +449,7 @@ def _build_load_stage(
         Per-task data selection expressed as indices *relative to the start of the
         pre-loaded disk chunk*, or ``None`` when ``load_node_id == -1``.
     """
-    disk_chunk_group_to_id: Dict = {}
+    disk_chunk_group_to_id: dict = {}
     load_input_params_list: list = []
     load_node_ids: list = []
     relative_data_selections: list = []
@@ -459,8 +458,8 @@ def _build_load_stage(
         data_selection = task_params.get("data_selection", {})
 
         group_key_parts = []
-        disk_level_selection: Dict = {}
-        relative_sel: Dict = {}
+        disk_level_selection: dict = {}
+        relative_sel: dict = {}
         skip = False
 
         for xds_name, xds_sel in data_selection.items():
@@ -522,7 +521,7 @@ def _build_load_stage(
         if group_key not in disk_chunk_group_to_id:
             new_id = len(load_input_params_list)
             disk_chunk_group_to_id[group_key] = new_id
-            load_params: Dict = {
+            load_params: dict = {
                 "input_data_store": task_params["input_data_store"],
                 "data_selection": disk_level_selection,
             }

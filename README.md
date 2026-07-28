@@ -14,9 +14,21 @@ GraphVIPER (Visibility and Image Parallel Execution Reduction) is a [Dask](https
 
 The best place to start with GraphVIPER is doing the [graph building tutorial](https://graphviper.readthedocs.io/en/latest/graph_building_tutorial.html).
 
+## Developer Setup
 
+```bash
+git clone git@github.com:casangi/graphviper.git
+cd graphviper
+pip install -e '.[all]'
+pre-commit install
+```
 
+The `pre-commit install` step sets up git hooks that automatically run code
+formatting and import sorting (ruff) and strip Jupyter notebook outputs
+(nbstripout) on every commit. This keeps diffs clean and prevents large binary
+outputs from bloating the repository. The same hooks run in CI (the
+`pre-commit` workflow), so run them locally before pushing.
 
-
-
-
+If `pre-commit` detects and makes any changes, those files will need to be
+re-staged before committing. This is to allow the developer to inspect the
+modified file before committing.

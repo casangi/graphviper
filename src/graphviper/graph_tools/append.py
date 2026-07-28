@@ -1,11 +1,12 @@
-from typing import Any, Callable, Dict
+from collections.abc import Callable
+from typing import Any, Dict
 
 
 def append(
-    graph: Dict,
+    graph: dict,
     append_node_task: Callable[..., Any],
-    input_params: Dict,
-) -> Dict:
+    input_params: dict,
+) -> dict:
     """Appends a single node after the reduce step of a map/reduce graph.
 
     The appended node consumes the reduced result — use it for a

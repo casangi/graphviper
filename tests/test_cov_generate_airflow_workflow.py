@@ -1,8 +1,8 @@
 import pytest
 
 from graphviper.graph_tools.generate_airflow_workflow import (
-    generate_airflow_workflow,
     airflow_dag_to_graphviz,
+    generate_airflow_workflow,
 )
 
 # The whole Airflow backend is deprecated; every call emits a

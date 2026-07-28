@@ -115,7 +115,7 @@ def {dag_name}():
     map_results_list = {map_node_task_name}.expand(input_params={map_input_params})
 
     {reduce_code_str}
-        
+
 {dag_name}()
     """
 

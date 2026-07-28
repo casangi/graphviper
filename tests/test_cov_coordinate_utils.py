@@ -4,19 +4,19 @@ No network, no dask cluster, no real measurement sets: synthetic
 xarray/numpy/mocks only.
 """
 
+import dask.array as da
 import numpy as np
 import pytest
 import xarray as xr
-import dask.array as da
 
 from graphviper.graph_tools.coordinate_utils import (
-    make_time_coord,
+    _partition_ps_by_non_dimensions,
+    get_disk_chunk_sizes,
+    interpolate_data_coords_onto_parallel_coords,
     make_frequency_coord,
     make_parallel_coord,
     make_parallel_coord_by_gap,
-    _partition_ps_by_non_dimensions,
-    interpolate_data_coords_onto_parallel_coords,
-    get_disk_chunk_sizes,
+    make_time_coord,
 )
 
 

@@ -1,11 +1,11 @@
 import itertools
 import numbers
+from collections.abc import Hashable
+from typing import Dict, Optional, Union
 
 import numpy as np
-import xarray as xr
 import toolviper.utils.logger as logger
-
-from typing import Dict, Union, Optional, Hashable
+import xarray as xr
 from scipy.interpolate import interp1d
 
 
@@ -14,7 +14,7 @@ def make_time_coord(
     time_delta: numbers.Number = 3600,
     n_samples: int = 10,
     time_scale: {"tai", "tcb", "tcg", "tdb", "tt", "ut1", "utc", "local"} = "utc",
-) -> Dict:
+) -> dict:
     """Convenience function that creates a time coordinate `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ that can be used to create :ref:`parallel_coords <parallel coords>` using :func:`make_parallel_coord` function.
 
     Parameters
@@ -49,8 +49,8 @@ def make_time_coord(
 
     The time_array values are in `Unix <https://docs.astropy.org/en/stable/api/astropy.time.TimeUnix.html#astropy.time.TimeUnix>`_ seconds.
     """
-    from astropy.timeseries import TimeSeries
     from astropy import units as u
+    from astropy.timeseries import TimeSeries
 
     time_array = np.array(
         TimeSeries(
@@ -77,7 +77,7 @@ def make_frequency_coord(
     freq_delta: numbers.Number = 0.4 * 10**9,
     n_channels: int = 50,
     velocity_frame: {"gcrs", "icrs", "hcrs", "lsrk", "lsrd", "lsr"} = "lsrk",
-) -> Dict:
+) -> dict:
     """Convenience function that creates a frequency coordinate `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ that can be used to create :ref:`parallel_coords <parallel coords>` using :func:`make_parallel_coord` function.
 
     Parameters
@@ -122,10 +122,10 @@ def make_frequency_coord(
 
 
 def make_parallel_coord(
-    coord: Union[Dict, xr.DataArray],
-    n_chunks: Union[None, int] = None,
-    gap: Union[None, float] = None,
-) -> Dict:
+    coord: dict | xr.DataArray,
+    n_chunks: None | int = None,
+    gap: None | float = None,
+) -> dict:
     """Creates a single parallel coordinate from a `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ or a `xarray.DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_ with `measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_.
 
     This function only returns a single :ref:`parallel_coord <parallel coord>` to create :ref:`parallel_coords <parallel coords>` a dictionary must be created where the keys are the dimension coordinate names and the values are the respective :ref:`parallel_coord <parallel coord>`.
@@ -186,7 +186,9 @@ def make_parallel_coord(
     """
 
     if isinstance(coord, xr.core.dataarray.DataArray):
-        coord = coord.copy(deep=True).to_dict(
+        coord = coord.copy(
+            deep=True
+        ).to_dict(
             data="array"
         )  # Deep copy so that we don't accidentally modify the xr.core.dataarray.DataArray.
 
@@ -227,7 +229,7 @@ def make_parallel_coord(
     return parallel_coord
 
 
-def make_parallel_coord_by_gap(coord: Union[Dict, xr.DataArray], gap: float) -> Dict:
+def make_parallel_coord_by_gap(coord: dict | xr.DataArray, gap: float) -> dict:
     """Creates a single parallel coordinate from from a `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ or a `xarray.DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_ with `measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_.
 
     This function only returns a single :ref:`parallel_coord <parallel coord>`; to create :ref:`parallel_coords <parallel coords>` a dictionary must be created where the keys are the dimension coordinate names and the values are the respective :ref:`parallel_coord <parallel coord>`.
@@ -264,7 +266,7 @@ def make_parallel_coord_by_gap(coord: Union[Dict, xr.DataArray], gap: float) -> 
     return parallel_coord
 
 
-def _array_split(data: Union[list, np.ndarray], n_chunks: int):
+def _array_split(data: list | np.ndarray, n_chunks: int):
     """Takes an input array and splits it into n_chunk arrays which are stored in a dictionary with numbered keys.
 
     Parameters
@@ -297,7 +299,7 @@ def _array_split(data: Union[list, np.ndarray], n_chunks: int):
     return data_chunks
 
 
-def _array_split_edges(data_chunks_dict: Dict):
+def _array_split_edges(data_chunks_dict: dict):
     """
     Creates a list of the start and end values of arrays in data_chunks_dict.
 
@@ -318,7 +320,7 @@ def _array_split_edges(data_chunks_dict: Dict):
     return data_chunks_edges
 
 
-def _array_split_slices(data_chunks_dict: Dict) -> Dict:
+def _array_split_slices(data_chunks_dict: dict) -> dict:
     """
     Creates a dictionary of slices giving the start and end index of each chunk
     relative to the full (unsplit) array.
@@ -343,7 +345,7 @@ def _array_split_slices(data_chunks_dict: Dict) -> Dict:
     return slices
 
 
-def _make_iter_chunks_indices(parallel_coords: Dict):
+def _make_iter_chunks_indices(parallel_coords: dict):
     """Creates an iterator of all the combinations of the chunks in the parallel coordinates.
 
     Parameters
@@ -464,7 +466,7 @@ def _nearest_interp_indices(
 
 def interpolate_data_coords_onto_parallel_coords(
     parallel_coords: dict,
-    input_data: Union[Dict, xr.DataTree],
+    input_data: dict | xr.DataTree,
     interpolation_method: {
         "linear",
         "nearest",
@@ -477,8 +479,8 @@ def interpolate_data_coords_onto_parallel_coords(
         "next",
     } = "nearest",
     assume_sorted: bool = True,
-    ps_partition: Optional[list[str]] = None,
-) -> Dict:
+    ps_partition: list[str] | None = None,
+) -> dict:
     """Interpolate data_coords onto parallel_coords to create the ``node_task_data_mapping``. For the case of string coordinates (for example antenna_name), only exact matching is performed.
 
     Parameters
@@ -602,7 +604,6 @@ def interpolate_data_coords_onto_parallel_coords(
     # here, so repeating the work n_partitions times was wasteful.
     # -----------------------------------------------------------------------
     for dim, pc in parallel_coords.items():
-
         # Pre-compute once per dim (not once per (partition, xds_name, dim))
         if "data_chunks_edges" not in pc:
             pc["data_chunks_edges"] = _array_split_edges(pc["data_chunks"])
@@ -610,7 +611,6 @@ def interpolate_data_coords_onto_parallel_coords(
         sorted_chunk_keys = sorted(pc["data_chunks"].keys())
 
         for xds_name in input_data:
-
             # Cache coordinate array once — avoids repeated xarray/zarr access
             # and eliminates per-chunk xarray element indexing later.
             coord_da = input_data[xds_name][dim]
@@ -731,9 +731,9 @@ def interpolate_data_coords_onto_parallel_coords(
 
 
 def get_disk_chunk_sizes(
-    input_data: Union[Dict, xr.DataTree],
-    parallel_coords: Dict,
-) -> Dict[str, int]:
+    input_data: dict | xr.DataTree,
+    parallel_coords: dict,
+) -> dict[str, int]:
     """Determine the native on-disk chunk size for each parallel coordinate dimension.
 
     When a Zarr store is opened lazily with ``xarray`` (``chunks={}`` or
@@ -787,10 +787,10 @@ def get_disk_chunk_sizes(
     >>> # e.g. {"frequency": 200}
     >>> viper_graph = map(..., disk_chunk_sizes=disk_chunk_sizes)
     """
-    disk_chunk_sizes: Dict[str, int] = {}
+    disk_chunk_sizes: dict[str, int] = {}
 
     for dim in parallel_coords:
-        min_chunk_size: Optional[int] = None
+        min_chunk_size: int | None = None
 
         for xds_name, xds in input_data.items():
             # DataTree nodes expose their dataset via .ds; plain dicts yield
@@ -800,7 +800,7 @@ def get_disk_chunk_sizes(
             if dim not in ds.dims and dim not in ds.coords:
                 continue
 
-            first_chunk: Optional[int] = None
+            first_chunk: int | None = None
             for data_var in ds.data_vars.values():
                 if dim not in data_var.dims:
                     continue

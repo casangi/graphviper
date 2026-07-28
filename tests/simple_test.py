@@ -3,9 +3,9 @@ from graphviper.graph_tools.coordinate_utils import make_frequency_coord
 
 def main():
     import dask
-    from dask.distributed import Client
-    import xarray as xr
     import numpy as np
+    import xarray as xr
+    from dask.distributed import Client
 
     viper_client = Client(n_workers=4, threads_per_worker=1, memory_limit="4GB")
 
@@ -26,9 +26,10 @@ def main():
     # The visualization of the graph looks correct, and the graph is successfully built, but the compute never finishes.
     # The dask dashboard is active but shows no activity.
 
-    from graphviper.graph_tools.coordinate_utils import make_parallel_coord
-
-    from graphviper.graph_tools.coordinate_utils import make_frequency_coord
+    from graphviper.graph_tools.coordinate_utils import (
+        make_frequency_coord,
+        make_parallel_coord,
+    )
 
     n_chunks = 3
 
@@ -58,11 +59,10 @@ def main():
         parallel_coords, ps_xdt
     )
 
-    from graphviper.graph_tools.map import map
     from graphviper.graph_tools.generate_dask_workflow import generate_dask_workflow
+    from graphviper.graph_tools.map import map
 
     def my_func(input_params):
-
         print("*" * 30)
         return input_params["test_input"]
 

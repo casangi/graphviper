@@ -16,19 +16,18 @@ def delete_files(filepaths=None):
 
 
 def test_map_reduce():
+    import dask
+    from toolviper.dask.client import local_client
     from toolviper.utils.data import download
-    from graphviper.graph_tools.map import map
+    from xradio.measurement_set import (
+        convert_msv2_to_processing_set,
+    )
+
     from graphviper.graph_tools.coordinate_utils import (
         interpolate_data_coords_onto_parallel_coords,
     )
     from graphviper.graph_tools.generate_dask_workflow import generate_dask_workflow
-    import dask
-
-    from toolviper.dask.client import local_client
-
-    from xradio.measurement_set import (
-        convert_msv2_to_processing_set,
-    )
+    from graphviper.graph_tools.map import map
 
     viper_client = local_client(cores=2, memory_limit="3GB", autorestrictor=True)
 
@@ -103,8 +102,9 @@ def test_map_reduce():
         client=None,
     )
 
-    from graphviper.graph_tools import reduce
     import numpy as np
+
+    from graphviper.graph_tools import reduce
 
     def my_sum(graph_inputs, input_params):
         return np.sum(graph_inputs) + input_params["test_input"]
@@ -164,12 +164,10 @@ def test_ps_partition():
     spw_split_success = all(
         [
             len(
-                set(
-                    [
-                        ps[k].frequency.attrs["spectral_window_name"]
-                        for k in dm["data_selection"].keys()
-                    ]
-                )
+                {
+                    ps[k].frequency.attrs["spectral_window_name"]
+                    for k in dm["data_selection"].keys()
+                }
             )
             == 1
             for dm in node_task_data_mapping.values()
@@ -280,16 +278,16 @@ def test_build_load_stage_extra_params():
 def test_load_layer_generate_dask_workflow():
     """End-to-end test: load layer pre-loads disk chunks and delivers sub-selected
     data to each map task via input_params['input_data']."""
+    import dask
     import numpy as np
     import xarray as xr
-    import dask
 
-    from graphviper.graph_tools.map import map as viper_map
     from graphviper.graph_tools.coordinate_utils import (
         interpolate_data_coords_onto_parallel_coords,
         make_parallel_coord,
     )
     from graphviper.graph_tools.generate_dask_workflow import generate_dask_workflow
+    from graphviper.graph_tools.map import map as viper_map
 
     # Synthetic dataset: vis[i] = i for frequency i in 0..11
     n_freq = 12
@@ -372,21 +370,11 @@ if __name__ == "__main__":
     test_build_load_stage_boundary()
     test_build_load_stage_extra_params()
     test_load_layer_generate_dask_workflow()
-"""
-chunk_indx 0 (0, 0)
-chunk_indx 1 (0, 1)
-chunk_indx 2 (0, 2)
-chunk_indx 3 (1, 0)
-chunk_indx 4 (1, 1)
-chunk_indx 5 (1, 2)
-chunk_indx 6 (2, 0)
-chunk_indx 7 (2, 1)
-chunk_indx 8 (2, 2)
-chunk_indx 9 (3, 0)
-chunk_indx 10 (3, 1)
-chunk_indx 11 (3, 2)
-
-"""
+# Reference chunk-index layout for the tests above:
+# chunk_indx 0 (0, 0)   chunk_indx 1 (0, 1)   chunk_indx 2 (0, 2)
+# chunk_indx 3 (1, 0)   chunk_indx 4 (1, 1)   chunk_indx 5 (1, 2)
+# chunk_indx 6 (2, 0)   chunk_indx 7 (2, 1)   chunk_indx 8 (2, 2)
+# chunk_indx 9 (3, 0)   chunk_indx 10 (3, 1)  chunk_indx 11 (3, 2)
 
 
 def test_make_graph_node_task():
@@ -481,8 +469,10 @@ def test_reduce_tree_n_dask_backend():
     """The variable-arity reduce ('tree_n') produces the same result as the binary
     'tree' and 'single_node' modes for any n_batch, on the Dask backend."""
     import copy
+
     import dask
-    from graphviper.graph_tools import reduce, generate_dask_workflow
+
+    from graphviper.graph_tools import generate_dask_workflow, reduce
 
     def my_sum(inputs, params):
         # inputs is a list of map outputs and/or already-combined partials.

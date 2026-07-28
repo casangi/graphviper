@@ -1,7 +1,7 @@
 import contextlib
+from collections import defaultdict
 
 import dask
-from collections import defaultdict
 
 
 def _tree_combine(list_to_combine, reduce_node_task, input_params):

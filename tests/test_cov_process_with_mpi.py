@@ -11,13 +11,13 @@ import types
 
 import pytest
 
+from graphviper.graph_tools.map import map as viper_map
 from graphviper.graph_tools.process_with_mpi import (
-    _configure_cloudpickle,
     _combine_tree_n_local,
     _combine_tree_n_pool,
+    _configure_cloudpickle,
     processes_with_mpi,
 )
-from graphviper.graph_tools.map import map as viper_map
 from graphviper.graph_tools.reduce import reduce as viper_reduce
 
 
@@ -383,8 +383,9 @@ def test_force_exit_after_rearm_cancels_previous():
 def test_force_exit_after_fire_calls_os_exit(monkeypatch):
     # Invoke the timer's payload directly (never let a real timer fire) and
     # verify it hard-exits with code 0.
-    import graphviper.graph_tools.process_with_mpi as pwm
     import os
+
+    import graphviper.graph_tools.process_with_mpi as pwm
 
     calls = []
     monkeypatch.setattr(os, "_exit", lambda code: calls.append(code))

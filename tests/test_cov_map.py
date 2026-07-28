@@ -17,11 +17,13 @@ import pytest
 import xarray as xr
 
 from graphviper.graph_tools.map import (
-    map as viper_map,
-    _select_data,
-    _local_cache_configuration,
-    _get_unique_resource_ip,
     _build_load_stage,
+    _get_unique_resource_ip,
+    _local_cache_configuration,
+    _select_data,
+)
+from graphviper.graph_tools.map import (
+    map as viper_map,
 )
 
 
@@ -394,9 +396,10 @@ def test_build_load_stage_non_disk_dim_keeps_original_slice():
 # monitor_node_task / map(monitor_resources_seconds=...)
 # --------------------------------------------------------------------------- #
 def test_monitor_node_task_attaches_series():
-    from graphviper.graph_tools.map import monitor_node_task
     import pickle
     import time
+
+    from graphviper.graph_tools.map import monitor_node_task
 
     def node(input_params):
         time.sleep(0.08)
@@ -433,6 +436,7 @@ def test_monitor_node_task_non_dict_passthrough():
 
 def test_monitor_node_task_without_psutil_runs_unmonitored(monkeypatch):
     import sys
+
     from graphviper.graph_tools.map import monitor_node_task
 
     # `import psutil` raises ImportError when the module is None in sys.modules.
