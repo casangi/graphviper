@@ -448,7 +448,14 @@ def processes_with_mpi(viper_graph, cluster_setup=None):
                 viper_graph["reduce"]["input_params"],
                 arity,
             )
+            import time as _time
+
+            _t_submit = _time.time()
             futures = [executor.submit(map_fn, p) for p in map_input_params]
+            logger.info(
+                f"processes_with_mpi: all {n_tasks} tasks submitted in "
+                f"{_time.time() - _t_submit:.1f}s; awaiting completions."
+            )
             for i, fut in enumerate(as_completed(futures), start=1):
                 reducer.push(fut.result())
                 if progress_every and (i % progress_every == 0 or i == n_tasks):
