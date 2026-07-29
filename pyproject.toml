@@ -100,6 +100,11 @@ target-version = "py311"
 #   UP       -- pyupgrade: outdated syntax/typing (mirrors the pyupgrade hook)
 select = ["E4", "E7", "E9", "F", "B", "UP", "I"]
 
+[tool.ruff.lint.per-file-ignores]
+# Tutorial notebooks introduce imports cell-by-cell as the narrative needs
+# them; that is deliberate style, not an error.
+"*.ipynb" = ["E402"]
+
 [tool.pytest.ini_options]
 # Suppress zarr v3's UnstableSpecificationWarning during test runs. It is emitted
 # for fixed-length unicode string dtypes (e.g. antenna_name / spectral_window_name
