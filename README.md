@@ -24,7 +24,7 @@ pre-commit install
 ```
 
 The `pre-commit install` step sets up git hooks that automatically run code
-formatting and import sorting (ruff) and strip Jupyter notebook outputs
+formatting, linting, and import sorting (ruff; rules in [tool.ruff.lint] of pyproject.toml) and strip Jupyter notebook outputs
 (nbstripout) on every commit. This keeps diffs clean and prevents large binary
 outputs from bloating the repository. The same hooks run in CI (the
 `pre-commit` workflow), so run them locally before pushing.

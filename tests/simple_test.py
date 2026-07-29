@@ -3,8 +3,6 @@ from graphviper.graph_tools.coordinate_utils import make_frequency_coord
 
 def main():
     import dask
-    import numpy as np
-    import xarray as xr
     from dask.distributed import Client
 
     viper_client = Client(n_workers=4, threads_per_worker=1, memory_limit="4GB")
@@ -16,7 +14,7 @@ def main():
         print("Hello from a worker!")
 
     delyaed_list = []
-    for i in range(10):
+    for _ in range(10):
         delyaed_list.append(dask.delayed(my_func)())
     dask.compute(delyaed_list)
 
@@ -27,16 +25,13 @@ def main():
     # The dask dashboard is active but shows no activity.
 
     from graphviper.graph_tools.coordinate_utils import (
-        make_frequency_coord,
         make_parallel_coord,
     )
 
     n_chunks = 3
 
-    ps_store = "Antennae_North.cal.lsrk.split.ps.zarr"
     from xradio.measurement_set import open_processing_set
 
-    fields = None
     ps_xdt = open_processing_set(
         ps_store="Antennae_North.cal.lsrk.split.ps.zarr",
         scan_intents=["OBSERVE_TARGET#ON_SOURCE"],

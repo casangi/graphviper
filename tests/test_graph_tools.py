@@ -1,6 +1,3 @@
-from importlib.metadata import files
-
-
 def delete_files(filepaths=None):
     import os
     import shutil
@@ -29,7 +26,7 @@ def test_map_reduce():
     from graphviper.graph_tools.generate_dask_workflow import generate_dask_workflow
     from graphviper.graph_tools.map import map
 
-    viper_client = local_client(cores=2, memory_limit="3GB", autorestrictor=True)
+    local_client(cores=2, memory_limit="3GB", autorestrictor=True)
 
     ms_name = "Antennae_North.cal.lsrk.split.ms"
     ps_store = "Antennae_North.cal.lsrk.split.ps.zarr"
@@ -124,8 +121,6 @@ def test_map_reduce():
 
 
 def test_ps_partition():
-    import pathlib
-
     msv2name = "VLBA_TL016B_split.ms"
     zarrPath = "VLBA_TL016B_split.ps.zarr"
 
@@ -147,7 +142,6 @@ def test_ps_partition():
 
     from graphviper.graph_tools.coordinate_utils import (
         interpolate_data_coords_onto_parallel_coords,
-        make_parallel_coord,
     )
 
     # Let's try an empty parallel coord map first
@@ -505,7 +499,7 @@ def test_reduce_invalid_args():
     g = _trivial_map_graph(4)
     try:
         reduce(dict(g), lambda a, p: a, {}, mode="bogus")
-        assert False, "bad mode should raise"
+        raise AssertionError("bad mode should raise")
     except ValueError:
         pass
     # n_batch is validated unconditionally (>=2, int, not bool) -- a bad value is
@@ -514,7 +508,7 @@ def test_reduce_invalid_args():
         for bad in (1, 0, -1, 2.5, True):
             try:
                 reduce(dict(g), lambda a, p: a, {}, mode=mode, n_batch=bad)
-                assert False, f"mode={mode} n_batch={bad!r} should raise"
+                raise AssertionError(f"mode={mode} n_batch={bad!r} should raise")
             except ValueError:
                 pass
     # Valid n_batch=2 accepted for every mode.

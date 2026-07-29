@@ -1,7 +1,5 @@
 from collections.abc import Callable
-from typing import Any, Dict
-
-import dask
+from typing import Any, Literal
 
 # Accepted reduction modes.  ``tree`` (binary) and ``single_node`` are the
 # historical modes; ``tree_n`` is the variable-arity generalisation that combines
@@ -15,7 +13,7 @@ def reduce(
     graph: dict,
     reduce_node_task: Callable[..., Any],
     input_params: dict,
-    mode: {"tree", "single_node", "tree_n"} = "tree",
+    mode: Literal["tree", "single_node", "tree_n"] = "tree",
     n_batch: int = 2,
 ) -> dict:
     """Appends a reduce step to the graph created by the :func:`graphviper.graph_tools.map`. function.

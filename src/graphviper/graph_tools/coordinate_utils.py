@@ -1,7 +1,7 @@
 import itertools
 import numbers
 from collections.abc import Hashable
-from typing import Dict, Optional, Union
+from typing import Literal
 
 import numpy as np
 import toolviper.utils.logger as logger
@@ -13,7 +13,9 @@ def make_time_coord(
     time_start: str = "2019-10-03T19:00:00.000",
     time_delta: numbers.Number = 3600,
     n_samples: int = 10,
-    time_scale: {"tai", "tcb", "tcg", "tdb", "tt", "ut1", "utc", "local"} = "utc",
+    time_scale: Literal[
+        "tai", "tcb", "tcg", "tdb", "tt", "ut1", "utc", "local"
+    ] = "utc",
 ) -> dict:
     """Convenience function that creates a time coordinate `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ that can be used to create :ref:`parallel_coords <parallel coords>` using :func:`make_parallel_coord` function.
 
@@ -76,7 +78,7 @@ def make_frequency_coord(
     freq_start: numbers.Number = 3 * 10**9,
     freq_delta: numbers.Number = 0.4 * 10**9,
     n_channels: int = 50,
-    velocity_frame: {"gcrs", "icrs", "hcrs", "lsrk", "lsrd", "lsr"} = "lsrk",
+    velocity_frame: Literal["gcrs", "icrs", "hcrs", "lsrk", "lsrd", "lsr"] = "lsrk",
 ) -> dict:
     """Convenience function that creates a frequency coordinate `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ that can be used to create :ref:`parallel_coords <parallel coords>` using :func:`make_parallel_coord` function.
 
@@ -294,7 +296,7 @@ def _array_split(data: list | np.ndarray, n_chunks: int):
             break
         data_chunks_list.append(np.array(chunk))
 
-    data_chunks = dict(zip(np.arange(n_chunks), data_chunks_list))
+    data_chunks = dict(zip(np.arange(n_chunks), data_chunks_list, strict=False))
 
     return data_chunks
 
@@ -407,7 +409,8 @@ def _partition_ps_by_non_dimensions(ps, ps_partition_keys):
     ):
         # And for each key we look up the corresponding set of xds names
         sets = [
-            set(ps_split_map[key][i]) for i, key in zip(multi_index, ps_partition_keys)
+            set(ps_split_map[key][i])
+            for i, key in zip(multi_index, ps_partition_keys, strict=False)
         ]
         d[multi_index] = set.intersection(*sets)
 
@@ -467,7 +470,7 @@ def _nearest_interp_indices(
 def interpolate_data_coords_onto_parallel_coords(
     parallel_coords: dict,
     input_data: dict | xr.DataTree,
-    interpolation_method: {
+    interpolation_method: Literal[
         "linear",
         "nearest",
         "nearest-up",
@@ -477,7 +480,7 @@ def interpolate_data_coords_onto_parallel_coords(
         "cubic",
         "previous",
         "next",
-    } = "nearest",
+    ] = "nearest",
     assume_sorted: bool = True,
     ps_partition: list[str] | None = None,
 ) -> dict:
@@ -792,7 +795,7 @@ def get_disk_chunk_sizes(
     for dim in parallel_coords:
         min_chunk_size: int | None = None
 
-        for xds_name, xds in input_data.items():
+        for xds in input_data.values():
             # DataTree nodes expose their dataset via .ds; plain dicts yield
             # the dataset directly.
             ds = xds.ds if isinstance(xds, xr.DataTree) else xds

@@ -79,7 +79,7 @@ def generate_airflow_workflow(
     {reduce_node_task_name}(map_results_list,{reduce_input_params})
             """
         else:
-            assert False, "Usupported reduce mode."
+            raise AssertionError("Unsupported reduce mode.")
 
         reduce_node_task_str = inspect.getsource(
             viper_graph["reduce"]["node_task"]
