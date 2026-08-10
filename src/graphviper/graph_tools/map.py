@@ -12,6 +12,18 @@ import toolviper.utils.logger as logger
 import xarray as xr
 
 
+def _per_task_gc_enabled() -> bool:
+    """Whether the per-task full gc.collect() inside free_memory() runs.
+
+    Its cost is O(live GC-tracked objects) and therefore grows with worker age
+    in long-lived Dask workers that accumulate framework state (the 2026-08
+    Frontera drift investigation). Set GRAPHVIPER_PER_TASK_GC=0 in the worker
+    environment to skip it and rely on refcounting plus a process-level GC
+    policy (e.g. gc.freeze at worker boot). Default on (historical behavior).
+    """
+    return os.environ.get("GRAPHVIPER_PER_TASK_GC", "1") != "0"
+
+
 def make_graph_node_task(node_task: Callable) -> Callable:
     """Adapt ``node_task`` to the single-``input_params``-dict calling convention.
 
@@ -22,12 +34,19 @@ def make_graph_node_task(node_task: Callable) -> Callable:
     have a **fully explicit, documented, standalone-callable signature**:
 
     * If ``node_task`` follows the legacy convention -- it declares a parameter
-      named ``input_params`` (or takes a single argument) -- it is returned
-      unchanged.
+      named ``input_params`` (or takes a single argument) -- it keeps that
+      calling convention (and, since 2026-08, gains the same per-task memory
+      hooks as explicit node tasks; previously legacy tasks bypassed them).
     * Otherwise a thin wrapper ``<name>_wrap(input_params)`` is returned that
       expands the dict into ``node_task``'s explicit keyword arguments, forwarding
       only the keys ``node_task`` declares (extra keys in ``input_params`` are
       dropped, unless ``node_task`` accepts ``**kwargs``).
+
+    Both wrappers pin the malloc mmap threshold before the task body and call
+    :func:`toolviper.utils.memory_management.free_memory` in a ``finally`` (so
+    the release runs on the ``**kwargs`` path and on exceptions too). The full
+    per-task ``gc.collect()`` inside ``free_memory`` can be disabled with
+    ``GRAPHVIPER_PER_TASK_GC=0`` -- see :func:`_per_task_gc_enabled`.
 
     :func:`map` applies this automatically, so callers normally never need it --
     they simply pass either an ``input_params``-style or an explicit node task.
@@ -40,8 +59,8 @@ def make_graph_node_task(node_task: Callable) -> Callable:
     Returns
     -------
     callable
-        ``node_task`` unchanged (legacy), or a single-dict adapter named
-        ``<node_task.__name__>_wrap``.
+        A single-dict adapter: same name as ``node_task`` (legacy) or
+        ``<node_task.__name__>_wrap`` (explicit signature).
     """
     sig = inspect.signature(node_task)
     params = sig.parameters
@@ -58,9 +77,23 @@ def make_graph_node_task(node_task: Callable) -> Callable:
     ]
 
     # Legacy single-dict node task: it takes the whole input_params dict as one
-    # argument (named "input_params", or simply its only argument).
+    # argument (named "input_params", or simply its only argument). Wrapped so
+    # it gets the same memory hooks as explicit node tasks (it previously got
+    # none); functools.wraps keeps the original name, so Dask task-key prefixes
+    # and timing-analysis labels are unchanged.
     if "input_params" in params or (len(positional_like) == 1 and not has_var_kw):
-        return node_task
+
+        @functools.wraps(node_task)
+        def wrap_legacy(input_params):
+            from toolviper.utils.memory_management import free_memory, memory_setup
+
+            memory_setup(131072)
+            try:
+                return node_task(input_params)
+            finally:
+                free_memory(collect=_per_task_gc_enabled())
+
+        return wrap_legacy
 
     accepted = set(params)
 
@@ -69,17 +102,19 @@ def make_graph_node_task(node_task: Callable) -> Callable:
         # Pin the mmap threshold BEFORE any large allocations so they use mmap and
         # are returned to the OS immediately on free (no heap fragmentation). Must
         # run at the start of the task, not after, or fragmentation is already done.
+        # (A no-op when MALLOC_MMAP_THRESHOLD_ is set in the worker environment --
+        # the preferred, once-per-process way to set the policy.)
         from toolviper.utils.memory_management import free_memory, memory_setup
 
         memory_setup(131072)
-
-        if has_var_kw:
-            return node_task(**input_params)
-        return_dict = node_task(
-            **{k: v for k, v in input_params.items() if k in accepted}
-        )
-        free_memory()
-        return return_dict
+        # try/finally so the release also runs on the **kwargs path and on
+        # exceptions (both previously skipped it).
+        try:
+            if has_var_kw:
+                return node_task(**input_params)
+            return node_task(**{k: v for k, v in input_params.items() if k in accepted})
+        finally:
+            free_memory(collect=_per_task_gc_enabled())
 
     wrap.__name__ = node_task.__name__ + "_wrap"
     wrap.__qualname__ = getattr(node_task, "__qualname__", node_task.__name__) + "_wrap"
@@ -202,6 +237,16 @@ def monitor_node_task(node_task, interval):
         finally:
             stop_event.set()
             sampler.join(timeout=max(5.0, 2 * interval))
+            if sampler.is_alive():
+                # The stop event is set, so the thread exits after its pending
+                # psutil//proc read returns; warn because a wedged read (e.g.
+                # under Lustre load) means the series below may still be
+                # appended to, and repeated occurrences accumulate threads.
+                logger.warning(
+                    "graphviper resource sampler did not exit within its join "
+                    "timeout; continuing without it (it stops after the "
+                    "pending sample)."
+                )
 
         if isinstance(return_dict, dict):
             usage = {k: v for k, v in samples.items() if v}
@@ -337,6 +382,12 @@ def map(
     """
     n_tasks = len(node_task_data_mapping)
 
+    # Shallow-copy so the per-task keys injected below (task_id, data_selection,
+    # task_coords, input_data, date_time, ...) never leak into the CALLER's
+    # dict (they previously did, leaving it polluted with the last task's
+    # values).
+    input_params = dict(input_params)
+
     # Allow the node task to have an explicit, documented signature instead of a
     # single ``input_params`` dict: legacy single-dict node tasks are returned
     # unchanged, explicit ones are wrapped so they are still called with one dict.
@@ -394,6 +445,9 @@ def map(
         ]
 
     if data_loading_task is not None and disk_chunk_sizes is not None:
+        # Load nodes allocate the largest buffers of all, yet previously got no
+        # memory hooks: route them through the same adapter as the map tasks.
+        data_loading_task = make_graph_node_task(data_loading_task)
         if load_node_input_params is None:
             load_node_input_params = {}
         load_input_params_list, load_node_ids, relative_data_selections = (
