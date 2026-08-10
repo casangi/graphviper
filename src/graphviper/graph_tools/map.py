@@ -181,6 +181,8 @@ def monitor_node_task(node_task, interval):
          "start_unixtime": <time.time() when sampling began>,
          "time_seconds": [...], "cpu_percent": [...],
          "memory_rss_bytes": [...],
+         # POSIX only: getrusage page-fault deltas over the task
+         "minor_page_faults": int, "major_page_faults": int,
          # present when the platform exposes them:
          "read_bytes": [...], "write_bytes": [...],      # block-level, cumulative
          "read_chars": [...], "write_chars": [...]}      # syscall-level, cumulative
@@ -226,6 +228,19 @@ def monitor_node_task(node_task, interval):
             name="graphviper-resource-sampler",
             daemon=True,
         )
+        # Process-wide page-fault counters bracketing the task (same
+        # one-task-per-process attribution caveat as the psutil series).
+        # Diagnostic for the 2026-08 within-run drift: if the drift is a
+        # growing per-allocation kernel cost (page-cache/THP/reclaim
+        # pressure), faults/task stays flat while time/fault grows; if
+        # allocation churn itself grows, faults/task grows with it.
+        try:
+            import resource as _resource
+
+            ru0 = _resource.getrusage(_resource.RUSAGE_SELF)
+        except ImportError:  # non-POSIX
+            _resource = None
+
         # Wall-clock anchor for the relative time_seconds series: lets an
         # analysis place every task on the run's common timeline (cluster-wide
         # usage at time t). Cross-node comparability relies on NTP-synced node
@@ -252,6 +267,10 @@ def monitor_node_task(node_task, interval):
             usage = {k: v for k, v in samples.items() if v}
             usage["sample_interval_seconds"] = interval
             usage["start_unixtime"] = start_unixtime
+            if _resource is not None:
+                ru1 = _resource.getrusage(_resource.RUSAGE_SELF)
+                usage["minor_page_faults"] = ru1.ru_minflt - ru0.ru_minflt
+                usage["major_page_faults"] = ru1.ru_majflt - ru0.ru_majflt
             return_dict["resource_usage"] = usage
         else:
             logger.debug(
