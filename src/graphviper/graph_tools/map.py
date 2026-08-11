@@ -24,6 +24,21 @@ def _per_task_gc_enabled() -> bool:
     return os.environ.get("GRAPHVIPER_PER_TASK_GC", "1") != "0"
 
 
+def _per_task_trim_enabled() -> bool:
+    """Whether free_memory() releases freed allocator memory to the OS after
+    every task (malloc_trim; historical default on).
+
+    Set GRAPHVIPER_PER_TASK_TRIM=0 -- together with a high
+    MALLOC_MMAP_THRESHOLD_/MALLOC_TRIM_THRESHOLD_ in the worker environment --
+    to retain and REUSE freed buffers instead. The 2026-08-11 Frontera
+    diagnosis showed the release-and-refault churn (~29 GB of fresh-touched
+    pages per task) is what slows tasks as node memory fragments and
+    transparent-huge-page coverage collapses; buffer reuse removes that
+    exposure at the cost of a stable resident working set.
+    """
+    return os.environ.get("GRAPHVIPER_PER_TASK_TRIM", "1") != "0"
+
+
 def make_graph_node_task(node_task: Callable) -> Callable:
     """Adapt ``node_task`` to the single-``input_params``-dict calling convention.
 
@@ -91,7 +106,9 @@ def make_graph_node_task(node_task: Callable) -> Callable:
             try:
                 return node_task(input_params)
             finally:
-                free_memory(collect=_per_task_gc_enabled())
+                free_memory(
+                    collect=_per_task_gc_enabled(), trim=_per_task_trim_enabled()
+                )
 
         return wrap_legacy
 
@@ -114,7 +131,7 @@ def make_graph_node_task(node_task: Callable) -> Callable:
                 return node_task(**input_params)
             return node_task(**{k: v for k, v in input_params.items() if k in accepted})
         finally:
-            free_memory(collect=_per_task_gc_enabled())
+            free_memory(collect=_per_task_gc_enabled(), trim=_per_task_trim_enabled())
 
     wrap.__name__ = node_task.__name__ + "_wrap"
     wrap.__qualname__ = getattr(node_task, "__qualname__", node_task.__name__) + "_wrap"
