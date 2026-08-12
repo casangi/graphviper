@@ -75,6 +75,62 @@ def _cycle_report_enabled() -> bool:
     return os.environ.get("GRAPHVIPER_LOG_CYCLES", "0") != "0"
 
 
+def _edge_label(parent, child) -> str:
+    """How ``parent`` references ``child``: a dict key, an attribute name, a
+    sequence marker, or '?' -- best-effort, for the cycle-path exemplar."""
+    try:
+        if isinstance(parent, dict):
+            for k, v in parent.items():
+                if v is child:
+                    return f"[{k!r}]" if isinstance(k, str) else "[<key>]"
+        d = getattr(parent, "__dict__", None)
+        if isinstance(d, dict):
+            for k, v in d.items():
+                if v is child:
+                    return f".{k}"
+        if isinstance(parent, list | tuple | set):
+            return "[i]"
+    except Exception:
+        pass
+    return "?"
+
+
+def _holder_path(target, seen_ids, max_depth=10) -> str:
+    """Referrer chain (types + edge labels) from the dead object graph down to
+    ``target`` (the biggest leaked ndarray): walks gc.get_referrers upward,
+    staying inside the unreachable set (``seen_ids``), so the printed chain
+    names WHICH structures pin the payload -- the missing information when the
+    type histogram alone is ambiguous. Best-effort; returns '' on any issue."""
+    import gc
+
+    try:
+        chain = [target]
+        chain_ids = {id(target)}
+        for _ in range(max_depth):
+            refs = [
+                r
+                for r in gc.get_referrers(chain[-1])
+                if id(r) in seen_ids
+                and id(r) not in chain_ids
+                and not isinstance(r, type)
+            ]
+            if not refs:
+                break
+            # prefer named containers over raw dicts/lists for readability
+            refs.sort(key=lambda r: isinstance(r, dict | list | tuple))
+            chain.append(refs[0])
+            chain_ids.add(id(refs[0]))
+        parts = []
+        for child, parent in zip(chain[:-1], chain[1:], strict=False):
+            label = _edge_label(parent, child)
+            parts.append(f"{type(parent).__module__}.{type(parent).__name__}{label}")
+        parts.reverse()
+        gb = getattr(target, "nbytes", 0) / 1e9
+        return " -> ".join(parts + [f"ndarray({gb:.2f}GB)"])
+    except Exception:
+        return ""
+
+
 def _log_cycle_report(input_params) -> None:
     """Collect with DEBUG_SAVEALL and print a one-line inventory of the
     reference cycles this task left behind: how many objects, how many bytes
@@ -125,11 +181,13 @@ def _log_cycle_report(input_params) -> None:
                     holders[f"{type(r).__module__}.{type(r).__name__}"] += 1
         top = ", ".join(f"{t} x{c}" for t, c in by_type.most_common(12))
         held = ", ".join(f"{t} x{c}" for t, c in holders.most_common(8))
+        path = _holder_path(arrays[0], seen) if arrays else ""
         print(
             f"graphviper cycle-report pid={os.getpid()} task={task_id} "
             f"unreachable={unreachable} garbage_objs={len(garbage)} "
             f"ndarray_bytes={nd_bytes / 1e9:.2f}GB "
-            f"top_types=[{top}] big_array_holders=[{held}]",
+            f"top_types=[{top}] big_array_holders=[{held}] "
+            f"path_to_biggest=[{path}]",
             flush=True,
         )
         del garbage, arrays
@@ -157,8 +215,12 @@ def _log_memory_state(input_params) -> None:
         pid = os.getpid()
         if not _memory_setup_logged:
             _memory_setup_logged = True
+            import pandas as _pd
+
             print(
-                f"graphviper memory-setup pid={pid} {memory_setup_summary()}",
+                f"graphviper memory-setup pid={pid} {memory_setup_summary()} "
+                f"versions=xarray-{xr.__version__}/pandas-{_pd.__version__}"
+                f"/numpy-{np.__version__}",
                 flush=True,
             )
         task_id = (
