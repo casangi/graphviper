@@ -12,6 +12,20 @@ import toolviper.utils.logger as logger
 import xarray as xr
 
 
+def _task_memory_management_enabled() -> bool:
+    """Master switch for graphviper's per-task memory hooks.
+
+    Set GRAPHVIPER_TASK_MEMORY_MANAGEMENT=0 in the worker environment to run
+    node tasks completely vanilla: no memory_setup (mallopt), no free_memory
+    (no gc.collect, no malloc_trim) -- the pre-2026-06 behavior. Used as the
+    baseline arm of the 2026-08 Frontera drift/page-fault experiments; note
+    it reintroduces the memory-bloat exposure those hooks were added for.
+    Default on (historical behavior). The finer GRAPHVIPER_PER_TASK_GC /
+    GRAPHVIPER_PER_TASK_TRIM knobs only apply when this master switch is on.
+    """
+    return os.environ.get("GRAPHVIPER_TASK_MEMORY_MANAGEMENT", "1") != "0"
+
+
 def _per_task_gc_enabled() -> bool:
     """Whether the per-task full gc.collect() inside free_memory() runs.
 
@@ -100,6 +114,8 @@ def make_graph_node_task(node_task: Callable) -> Callable:
 
         @functools.wraps(node_task)
         def wrap_legacy(input_params):
+            if not _task_memory_management_enabled():
+                return node_task(input_params)
             from toolviper.utils.memory_management import free_memory, memory_setup
 
             memory_setup(131072)
@@ -116,6 +132,10 @@ def make_graph_node_task(node_task: Callable) -> Callable:
 
     @functools.wraps(node_task)
     def wrap(input_params):
+        if not _task_memory_management_enabled():
+            if has_var_kw:
+                return node_task(**input_params)
+            return node_task(**{k: v for k, v in input_params.items() if k in accepted})
         # Pin the mmap threshold BEFORE any large allocations so they use mmap and
         # are returned to the OS immediately on free (no heap fragmentation). Must
         # run at the start of the task, not after, or fragmentation is already done.
