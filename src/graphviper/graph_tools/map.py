@@ -61,6 +61,83 @@ def _memory_state_logging_enabled() -> bool:
     return os.environ.get("GRAPHVIPER_LOG_MEMORY_STATE", "0") != "0"
 
 
+def _cycle_report_enabled() -> bool:
+    """Whether each mapping task runs a cycle-hunting collection afterwards
+    and logs WHAT was in the reference cycles (type histogram, ndarray bytes,
+    holders of the largest arrays). Set GRAPHVIPER_LOG_CYCLES=1 to enable.
+
+    Diagnostic for the 2026-08-12 finding that every node task leaves ~2-3 GB
+    of uncollected cyclic garbage (RSS ratchets until an automatic gen-1/2
+    collection fires; OOMs 14-worker nodes). NOTE: the report itself collects
+    the cycles, so runs with it enabled show flat RSS -- its purpose is to
+    NAME the cyclic structures so they can be broken at the source, not to
+    reproduce the ratchet. Default off."""
+    return os.environ.get("GRAPHVIPER_LOG_CYCLES", "0") != "0"
+
+
+def _log_cycle_report(input_params) -> None:
+    """Collect with DEBUG_SAVEALL and print a one-line inventory of the
+    reference cycles this task left behind: how many objects, how many bytes
+    of ndarray payload, the most common (module.type)s, and the types holding
+    direct references to the largest arrays. Never raises."""
+    import gc
+
+    try:
+        task_id = (
+            input_params.get("task_id") if isinstance(input_params, dict) else None
+        )
+        gc.set_debug(gc.DEBUG_SAVEALL)
+        try:
+            unreachable = gc.collect()
+        finally:
+            gc.set_debug(0)
+        garbage = list(gc.garbage)
+        gc.garbage.clear()
+
+        from collections import Counter
+
+        by_type = Counter(f"{type(o).__module__}.{type(o).__name__}" for o in garbage)
+        # ndarrays are NOT gc-tracked, so the big buffers never appear in
+        # gc.garbage themselves -- they hang OFF the cycles. Walk referents
+        # transitively from the garbage (bounded) and attribute every ndarray
+        # reachable from it, deduplicating views via .base. Shared arrays that
+        # something live also references are a minor overcount -- fine for
+        # identification purposes.
+        seen = set()
+        stack = list(garbage)
+        nd = {}
+        while stack and len(seen) < 2_000_000:
+            o = stack.pop()
+            if id(o) in seen:
+                continue
+            seen.add(id(o))
+            if isinstance(o, np.ndarray):
+                base = o.base if isinstance(o.base, np.ndarray) else o
+                nd[id(base)] = base
+                continue
+            stack.extend(gc.get_referents(o))
+        arrays = sorted(nd.values(), key=lambda a: a.nbytes, reverse=True)
+        nd_bytes = sum(a.nbytes for a in arrays)
+        holders = Counter()
+        for a in arrays[:20]:  # who (within the dying graph) holds the big arrays?
+            for r in gc.get_referrers(a):
+                if id(r) in seen:
+                    holders[f"{type(r).__module__}.{type(r).__name__}"] += 1
+        top = ", ".join(f"{t} x{c}" for t, c in by_type.most_common(12))
+        held = ", ".join(f"{t} x{c}" for t, c in holders.most_common(8))
+        print(
+            f"graphviper cycle-report pid={os.getpid()} task={task_id} "
+            f"unreachable={unreachable} garbage_objs={len(garbage)} "
+            f"ndarray_bytes={nd_bytes / 1e9:.2f}GB "
+            f"top_types=[{top}] big_array_holders=[{held}]",
+            flush=True,
+        )
+        del garbage, arrays
+        gc.collect()  # actually free the cycles SAVEALL kept alive
+    except Exception as exc:  # diagnostics only -- never fail the task
+        print(f"graphviper cycle-report failed: {exc!r}", flush=True)
+
+
 _memory_setup_logged = False
 
 
@@ -172,6 +249,8 @@ def make_graph_node_task(node_task: Callable) -> Callable:
             finally:
                 if _memory_state_logging_enabled():
                     _log_memory_state(input_params)
+                if _cycle_report_enabled():
+                    _log_cycle_report(input_params)
 
         return wrap_legacy
 
@@ -212,6 +291,8 @@ def make_graph_node_task(node_task: Callable) -> Callable:
             # what the worker actually retains between tasks.
             if _memory_state_logging_enabled():
                 _log_memory_state(input_params)
+            if _cycle_report_enabled():
+                _log_cycle_report(input_params)
 
     wrap.__name__ = node_task.__name__ + "_wrap"
     wrap.__qualname__ = getattr(node_task, "__qualname__", node_task.__name__) + "_wrap"
