@@ -53,6 +53,49 @@ def _per_task_trim_enabled() -> bool:
     return os.environ.get("GRAPHVIPER_PER_TASK_TRIM", "1") != "0"
 
 
+def _memory_state_logging_enabled() -> bool:
+    """Whether every mapping task logs a one-line memory-state snapshot to
+    the worker log after it completes (and after free_memory, when memory
+    management is on). Set GRAPHVIPER_LOG_MEMORY_STATE=1 in the worker
+    environment to enable; default off (zero overhead)."""
+    return os.environ.get("GRAPHVIPER_LOG_MEMORY_STATE", "0") != "0"
+
+
+_memory_setup_logged = False
+
+
+def _log_memory_state(input_params) -> None:
+    """Print the process memory state for this task to stdout (captured by
+    the dask worker / job log; MPI ranks likewise). The first call per
+    process also prints the memory SETUP line (allocator env + graphviper
+    knobs + any pinned mallopt threshold). Never raises -- diagnostics must
+    not fail a task."""
+    global _memory_setup_logged
+    try:
+        from toolviper.utils.memory_management import (
+            memory_setup_summary,
+            memory_state_summary,
+        )
+
+        pid = os.getpid()
+        if not _memory_setup_logged:
+            _memory_setup_logged = True
+            print(
+                f"graphviper memory-setup pid={pid} {memory_setup_summary()}",
+                flush=True,
+            )
+        task_id = (
+            input_params.get("task_id") if isinstance(input_params, dict) else None
+        )
+        print(
+            f"graphviper memory-state pid={pid} task={task_id} "
+            f"{memory_state_summary()}",
+            flush=True,
+        )
+    except Exception as exc:  # diagnostics only -- never fail the task
+        print(f"graphviper memory-state logging failed: {exc!r}", flush=True)
+
+
 def make_graph_node_task(node_task: Callable) -> Callable:
     """Adapt ``node_task`` to the single-``input_params``-dict calling convention.
 
@@ -114,17 +157,21 @@ def make_graph_node_task(node_task: Callable) -> Callable:
 
         @functools.wraps(node_task)
         def wrap_legacy(input_params):
-            if not _task_memory_management_enabled():
-                return node_task(input_params)
-            from toolviper.utils.memory_management import free_memory, memory_setup
-
-            memory_setup(131072)
             try:
-                return node_task(input_params)
+                if not _task_memory_management_enabled():
+                    return node_task(input_params)
+                from toolviper.utils.memory_management import free_memory, memory_setup
+
+                memory_setup(131072)
+                try:
+                    return node_task(input_params)
+                finally:
+                    free_memory(
+                        collect=_per_task_gc_enabled(), trim=_per_task_trim_enabled()
+                    )
             finally:
-                free_memory(
-                    collect=_per_task_gc_enabled(), trim=_per_task_trim_enabled()
-                )
+                if _memory_state_logging_enabled():
+                    _log_memory_state(input_params)
 
         return wrap_legacy
 
@@ -132,26 +179,39 @@ def make_graph_node_task(node_task: Callable) -> Callable:
 
     @functools.wraps(node_task)
     def wrap(input_params):
-        if not _task_memory_management_enabled():
-            if has_var_kw:
-                return node_task(**input_params)
-            return node_task(**{k: v for k, v in input_params.items() if k in accepted})
-        # Pin the mmap threshold BEFORE any large allocations so they use mmap and
-        # are returned to the OS immediately on free (no heap fragmentation). Must
-        # run at the start of the task, not after, or fragmentation is already done.
-        # (A no-op when MALLOC_MMAP_THRESHOLD_ is set in the worker environment --
-        # the preferred, once-per-process way to set the policy.)
-        from toolviper.utils.memory_management import free_memory, memory_setup
-
-        memory_setup(131072)
-        # try/finally so the release also runs on the **kwargs path and on
-        # exceptions (both previously skipped it).
         try:
-            if has_var_kw:
-                return node_task(**input_params)
-            return node_task(**{k: v for k, v in input_params.items() if k in accepted})
+            if not _task_memory_management_enabled():
+                if has_var_kw:
+                    return node_task(**input_params)
+                return node_task(
+                    **{k: v for k, v in input_params.items() if k in accepted}
+                )
+            # Pin the mmap threshold BEFORE any large allocations so they use mmap
+            # and are returned to the OS immediately on free (no heap
+            # fragmentation). Must run at the start of the task, not after, or
+            # fragmentation is already done. (A no-op when MALLOC_MMAP_THRESHOLD_
+            # is set in the worker environment -- the preferred, once-per-process
+            # way to set the policy.)
+            from toolviper.utils.memory_management import free_memory, memory_setup
+
+            memory_setup(131072)
+            # try/finally so the release also runs on the **kwargs path and on
+            # exceptions (both previously skipped it).
+            try:
+                if has_var_kw:
+                    return node_task(**input_params)
+                return node_task(
+                    **{k: v for k, v in input_params.items() if k in accepted}
+                )
+            finally:
+                free_memory(
+                    collect=_per_task_gc_enabled(), trim=_per_task_trim_enabled()
+                )
         finally:
-            free_memory(collect=_per_task_gc_enabled(), trim=_per_task_trim_enabled())
+            # After the task AND after any free_memory, so the snapshot shows
+            # what the worker actually retains between tasks.
+            if _memory_state_logging_enabled():
+                _log_memory_state(input_params)
 
     wrap.__name__ = node_task.__name__ + "_wrap"
     wrap.__qualname__ = getattr(node_task, "__qualname__", node_task.__name__) + "_wrap"
