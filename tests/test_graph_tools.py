@@ -372,21 +372,31 @@ if __name__ == "__main__":
 
 
 def test_make_graph_node_task():
-    """make_graph_node_task: legacy single-dict tasks pass through; explicit
-    signatures get a single-dict adapter that expands/filters the dict."""
+    """make_graph_node_task: legacy single-dict tasks keep their calling
+    convention but gain the per-task memory hooks (wrapped, name preserved);
+    explicit signatures get a single-dict adapter that expands/filters the
+    dict."""
     from graphviper.graph_tools.map import make_graph_node_task
 
-    # Legacy single-dict node task (named input_params) -> returned unchanged.
+    # Legacy single-dict node task (named input_params) -> wrapped for the
+    # memory hooks; functools.wraps keeps the name and the original function.
     def legacy(input_params):
         return input_params["a"]
 
-    assert make_graph_node_task(legacy) is legacy
+    wrapped_legacy = make_graph_node_task(legacy)
+    assert wrapped_legacy is not legacy
+    assert wrapped_legacy.__name__ == "legacy"
+    assert wrapped_legacy.__wrapped__ is legacy
+    assert wrapped_legacy({"a": 7}) == 7
 
     # A single argument of any name is also treated as the legacy dict.
     def legacy_other_name(params):
         return params
 
-    assert make_graph_node_task(legacy_other_name) is legacy_other_name
+    wrapped_other = make_graph_node_task(legacy_other_name)
+    assert wrapped_other.__name__ == "legacy_other_name"
+    assert wrapped_other.__wrapped__ is legacy_other_name
+    assert wrapped_other({"b": 2}) == {"b": 2}
 
     # Explicit signature -> wrapped; the dict is expanded and extra keys dropped.
     def explicit(a, b, c=3):
