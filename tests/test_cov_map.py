@@ -8,6 +8,10 @@ lines not exercised by tests/test_graph_tools.py:
 * 352-360  _select_data for both a plain dict and an xr.DataTree
 * 363-406  _local_cache_configuration (+/- VIPER_LOCAL_DIR) and
            _get_unique_resource_ip (success + assert failure)
+* monitor_node_task: I/O counters unavailable or vanishing, no resource
+  module, sampler still alive after its join timeout
+
+The per-task memory hooks are covered in test_cov_map_memory_hooks.py.
 
 No network, no real Dask cluster, no measurement sets: synthetic xarray only.
 """
@@ -443,6 +447,64 @@ def test_monitor_node_task_without_psutil_runs_unmonitored(monkeypatch):
     monkeypatch.setitem(sys.modules, "psutil", None)
     out = monitor_node_task(lambda p: {"ok": 1}, 0.02)({})
     assert out == {"ok": 1}  # no resource_usage key, task result untouched
+
+
+def test_monitor_node_task_io_counters_unavailable(monkeypatch):
+    """io_counters failing at the probe drops the I/O series (no crash)."""
+    import psutil
+
+    from graphviper.graph_tools.map import monitor_node_task
+
+    def broken(self):
+        raise OSError("no io counters")
+
+    monkeypatch.setattr(psutil.Process, "io_counters", broken, raising=False)
+    usage = monitor_node_task(lambda p: {"ok": 1}, 0.02)({})["resource_usage"]
+    assert "read_bytes" not in usage and len(usage["time_seconds"]) >= 1
+
+
+def test_monitor_node_task_io_counters_vanish(monkeypatch):
+    """io_counters failing after the probe stops the I/O series only."""
+    import psutil
+
+    from graphviper.graph_tools.map import monitor_node_task
+
+    calls = []
+
+    def first_call_only(self):
+        calls.append(1)
+        if len(calls) > 1:
+            raise OSError("counters vanished")
+        return type("io", (), {"read_bytes": 0, "write_bytes": 0})()
+
+    monkeypatch.setattr(psutil.Process, "io_counters", first_call_only, raising=False)
+    usage = monitor_node_task(lambda p: {"ok": 1}, 0.02)({})["resource_usage"]
+    assert "read_bytes" not in usage and "read_chars" not in usage
+
+
+def test_monitor_node_task_without_resource_module(monkeypatch):
+    """Non-POSIX: no resource module, no page-fault counts, task still runs."""
+    import sys
+
+    from graphviper.graph_tools.map import monitor_node_task
+
+    monkeypatch.setitem(sys.modules, "resource", None)
+    usage = monitor_node_task(lambda p: {"ok": 1}, 0.02)({})["resource_usage"]
+    assert "minor_page_faults" not in usage
+
+
+def test_monitor_node_task_sampler_join_timeout(monkeypatch):
+    """A sampler still alive after its join timeout is logged, not fatal."""
+    import threading
+
+    from graphviper.graph_tools.map import monitor_node_task
+
+    class StuckThread(threading.Thread):
+        def is_alive(self):
+            return True
+
+    monkeypatch.setattr(threading, "Thread", StuckThread)
+    assert monitor_node_task(lambda p: {"ok": 1}, 0.02)({})["ok"] == 1
 
 
 def test_map_monitor_resources_wraps_node_task():
