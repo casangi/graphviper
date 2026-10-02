@@ -15,13 +15,15 @@ import xarray as xr
 def _task_memory_management_enabled() -> bool:
     """Master switch for graphviper's per-task memory hooks.
 
-    Set GRAPHVIPER_TASK_MEMORY_MANAGEMENT=0 in the worker environment to run
-    node tasks completely vanilla: no memory_setup (mallopt), no free_memory
-    (no gc.collect, no malloc_trim) -- the pre-2026-06 behavior. Used as the
-    baseline arm of the 2026-08 Frontera drift/page-fault experiments; note
-    it reintroduces the memory-bloat exposure those hooks were added for.
-    Default on (historical behavior). The finer GRAPHVIPER_PER_TASK_GC /
-    GRAPHVIPER_PER_TASK_TRIM knobs only apply when this master switch is on.
+    Default on. With the default knobs the only hook is a full gc.collect()
+    after each node task (see _per_task_gc_enabled); the mmap threshold pin
+    (GRAPHVIPER_MMAP_THRESHOLD) and the per-task malloc_trim
+    (GRAPHVIPER_PER_TASK_TRIM) are opt-in. Set
+    GRAPHVIPER_TASK_MEMORY_MANAGEMENT=0 in the worker environment to run node
+    tasks completely vanilla: no memory_setup (mallopt), no free_memory (no
+    gc.collect, no malloc_trim), whatever the finer knobs say. Note that this
+    also drops the per-task collection of reference cycles that hold large
+    buffers. The finer knobs only apply when this master switch is on.
     """
     return os.environ.get("GRAPHVIPER_TASK_MEMORY_MANAGEMENT", "1") != "0"
 
@@ -33,24 +35,62 @@ def _per_task_gc_enabled() -> bool:
     in long-lived Dask workers that accumulate framework state (the 2026-08
     Frontera drift investigation). Set GRAPHVIPER_PER_TASK_GC=0 in the worker
     environment to skip it and rely on refcounting plus a process-level GC
-    policy (e.g. gc.freeze at worker boot). Default on (historical behavior).
+    policy (e.g. gc.freeze at worker boot). Default on: it frees reference
+    cycles that hold large numpy buffers, which refcounting never frees
+    (turning it off OOMed the 2026-08-10 Frontera run). In 2026-10
+    measurements of AstroVIPER imaging node tasks it added no page faults
+    and about 0.2 s to a 40 s task.
     """
     return os.environ.get("GRAPHVIPER_PER_TASK_GC", "1") != "0"
 
 
 def _per_task_trim_enabled() -> bool:
     """Whether free_memory() releases freed allocator memory to the OS after
-    every task (malloc_trim; historical default on).
+    every task (malloc_trim(0)). Default off.
 
-    Set GRAPHVIPER_PER_TASK_TRIM=0 -- together with a high
-    MALLOC_MMAP_THRESHOLD_/MALLOC_TRIM_THRESHOLD_ in the worker environment --
-    to retain and REUSE freed buffers instead. The 2026-08-11 Frontera
-    diagnosis showed the release-and-refault churn (~29 GB of fresh-touched
-    pages per task) is what slows tasks as node memory fragments and
-    transparent-huge-page coverage collapses; buffer reuse removes that
-    exposure at the cost of a stable resident working set.
+    Set GRAPHVIPER_PER_TASK_TRIM=1 to restore the per-task trim (the default
+    up to graphviper 0.0.52). Trimming after every task makes the next task
+    fault the same buffers in again from fresh zero pages: the 2026-08-11
+    Frontera diagnosis found this release-and-refault churn (~29 GB of
+    fresh-touched pages per task) slows tasks as node memory fragments and
+    transparent-huge-page coverage collapses. In 2026-10 measurements of
+    AstroVIPER imaging node tasks the old defaults (this trim plus the
+    128 KiB mmap threshold pin) gave 1.3-5x the minor page faults. Without
+    the trim glibc keeps freed heap for reuse (about 170 MB more resident
+    between those tasks) and still returns memory to the OS itself: mmap-ed
+    blocks on free and the top of the heap above M_TRIM_THRESHOLD.
     """
-    return os.environ.get("GRAPHVIPER_PER_TASK_TRIM", "1") != "0"
+    return os.environ.get("GRAPHVIPER_PER_TASK_TRIM", "0") != "0"
+
+
+def _mmap_threshold_bytes() -> int | None:
+    """The malloc mmap threshold to pin before each node task, or None.
+
+    Default None: graphviper leaves glibc's dynamic mmap threshold on, so
+    allocations above the threshold that are freed raise it (up to 32 MiB
+    on 64-bit) and later buffers of that size are served from the heap and
+    reused instead of being mapped and faulted in again on every task. Set
+    GRAPHVIPER_MMAP_THRESHOLD=<bytes> in the worker environment to call
+    toolviper's memory_setup(<bytes>) before each node task, which runs
+    mallopt(M_MMAP_THRESHOLD, <bytes>) once per process and disables the
+    dynamic threshold for the life of the process. 131072 restores the
+    behaviour up to graphviper 0.0.52. Unset, empty or 0 leaves the
+    threshold alone. memory_setup itself defers to MALLOC_MMAP_THRESHOLD_
+    when that is set in the environment.
+    """
+    value = os.environ.get("GRAPHVIPER_MMAP_THRESHOLD", "").strip()
+    if value in ("", "0"):
+        return None
+    try:
+        threshold = int(value)
+    except ValueError:
+        threshold = -1
+    if threshold < 0:
+        raise ValueError(
+            "GRAPHVIPER_MMAP_THRESHOLD must be a byte count (for example "
+            f"131072), got {value!r}"
+        )
+    return threshold
 
 
 def _memory_state_logging_enabled() -> bool:
@@ -253,11 +293,16 @@ def make_graph_node_task(node_task: Callable) -> Callable:
       only the keys ``node_task`` declares (extra keys in ``input_params`` are
       dropped, unless ``node_task`` accepts ``**kwargs``).
 
-    Both wrappers pin the malloc mmap threshold before the task body and call
-    :func:`toolviper.utils.memory_management.free_memory` in a ``finally`` (so
-    the release runs on the ``**kwargs`` path and on exceptions too). The full
-    per-task ``gc.collect()`` inside ``free_memory`` can be disabled with
-    ``GRAPHVIPER_PER_TASK_GC=0`` -- see :func:`_per_task_gc_enabled`.
+    Both wrappers call :func:`toolviper.utils.memory_management.free_memory`
+    in a ``finally`` (so the release runs on the ``**kwargs`` path and on
+    exceptions too). By default that is a full ``gc.collect()`` only
+    (``GRAPHVIPER_PER_TASK_GC=0`` turns it off, see
+    :func:`_per_task_gc_enabled`). The per-task ``malloc_trim``
+    (``GRAPHVIPER_PER_TASK_TRIM=1``) and the malloc mmap threshold pin before
+    the task body (``GRAPHVIPER_MMAP_THRESHOLD=<bytes>``) are opt-in; both
+    were on by default up to graphviper 0.0.52. See
+    :func:`_per_task_trim_enabled` and :func:`_mmap_threshold_bytes`.
+    ``GRAPHVIPER_TASK_MEMORY_MANAGEMENT=0`` turns every hook off.
 
     :func:`map` applies this automatically, so callers normally never need it --
     they simply pass either an ``input_params``-style or an explicit node task.
@@ -301,7 +346,9 @@ def make_graph_node_task(node_task: Callable) -> Callable:
                     return node_task(input_params)
                 from toolviper.utils.memory_management import free_memory, memory_setup
 
-                memory_setup(131072)
+                threshold = _mmap_threshold_bytes()
+                if threshold is not None:
+                    memory_setup(threshold)
                 try:
                     return node_task(input_params)
                 finally:
@@ -327,15 +374,17 @@ def make_graph_node_task(node_task: Callable) -> Callable:
                 return node_task(
                     **{k: v for k, v in input_params.items() if k in accepted}
                 )
-            # Pin the mmap threshold BEFORE any large allocations so they use mmap
-            # and are returned to the OS immediately on free (no heap
-            # fragmentation). Must run at the start of the task, not after, or
-            # fragmentation is already done. (A no-op when MALLOC_MMAP_THRESHOLD_
-            # is set in the worker environment -- the preferred, once-per-process
-            # way to set the policy.)
+            # Opt-in (GRAPHVIPER_MMAP_THRESHOLD): pin the mmap threshold BEFORE
+            # any large allocations, so they use mmap and go back to the OS on
+            # free. Off by default: the pin disables glibc's dynamic threshold
+            # for the life of the process, and every task then faults its
+            # large buffers in again. (A no-op when MALLOC_MMAP_THRESHOLD_ is
+            # set in the worker environment.)
             from toolviper.utils.memory_management import free_memory, memory_setup
 
-            memory_setup(131072)
+            threshold = _mmap_threshold_bytes()
+            if threshold is not None:
+                memory_setup(threshold)
             # try/finally so the release also runs on the **kwargs path and on
             # exceptions (both previously skipped it).
             try:
