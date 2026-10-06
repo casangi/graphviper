@@ -137,7 +137,7 @@ def make_parallel_coord(
     coord : Union[Dict, xr.DataArray]
         The input `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ or `xarray.DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_ with `measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_.
     n_chunks : Union[None, int]
-        If specified, how many chunks to divide coord into.
+        If specified, how many chunks to divide coord into. All chunks have the same length, except that the last one may be shorter; when no length gives exactly ``n_chunks`` chunks, the next shorter length is used, which gives the fewest chunks above ``n_chunks``. A coord with fewer than ``n_chunks`` values gives one chunk per value.
 
     gap : Union[None, float]
         If specified, gaps in coordinate values greater than the given value will be used to split chunks in the coordinate.
@@ -271,6 +271,11 @@ def make_parallel_coord_by_gap(coord: dict | xr.DataArray, gap: float) -> dict:
 def _array_split(data: list | np.ndarray, n_chunks: int):
     """Takes an input array and splits it into n_chunk arrays which are stored in a dictionary with numbered keys.
 
+    All chunks have the same length, except that the last one may be shorter.
+    When no length gives exactly n_chunks chunks, the next shorter length is
+    used, which gives the fewest chunks above n_chunks; data with fewer than
+    n_chunks elements gives one chunk per element.
+
     Parameters
     ----------
     data : Union[list,np.ndarray]
@@ -284,19 +289,25 @@ def _array_split(data: list | np.ndarray, n_chunks: int):
         Dictionary with array broken into chunks.
     """
 
+    if n_chunks < 1:
+        raise ValueError(f"n_chunks must be at least 1, got {n_chunks}.")
     chunk_size = int(np.ceil(len(data) / n_chunks))
+    if chunk_size > 1 and int(np.ceil(len(data) / chunk_size)) < n_chunks:
+        chunk_size -= 1
     from itertools import islice
 
     data_iter = iter(data)
 
     data_chunks_list = []
-    for _ in range(n_chunks):
+    for _ in range(len(data)):
         chunk = list(islice(data_iter, chunk_size))
         if not chunk:
             break
         data_chunks_list.append(np.array(chunk))
 
-    data_chunks = dict(zip(np.arange(n_chunks), data_chunks_list, strict=False))
+    data_chunks = dict(
+        zip(np.arange(len(data_chunks_list)), data_chunks_list, strict=True)
+    )
 
     return data_chunks
 

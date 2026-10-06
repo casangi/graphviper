@@ -86,6 +86,48 @@ def test_make_parallel_coord_short_array_early_break():
     assert len(pc["data_chunks"]) == 3
 
 
+def test_make_parallel_coord_never_fewer_chunks_than_requested():
+    # A chunk length of ceil(len/n_chunks) gave fewer chunks than requested
+    # (7 values in 6 chunks gave 4, 101 in 100 gave 51); the next shorter length
+    # is used instead. A split that is exact with ceil(len/n_chunks) is unchanged.
+    for size, n_chunks, lengths in [
+        (7, 6, [1] * 7),
+        (101, 100, [1] * 101),
+        (100, 30, [3] * 33 + [1]),
+        (10, 4, [3, 3, 3, 1]),
+    ]:
+        coord = {"data": np.arange(float(size)), "dims": ("x",), "attrs": {}}
+        pc = make_parallel_coord(coord=coord, n_chunks=n_chunks)
+        assert [len(pc["data_chunks"][k]) for k in sorted(pc["data_chunks"])] == lengths
+
+
+def test_make_parallel_coord_n_chunks_below_one_raises():
+    coord = {"data": np.arange(5.0), "dims": ("x",), "attrs": {}}
+    for n_chunks in (0, -1):
+        with pytest.raises(ValueError, match="n_chunks must be at least 1"):
+            make_parallel_coord(coord=coord, n_chunks=n_chunks)
+
+
+def test_make_parallel_coord_chunk_count_and_lengths():
+    # Every split of up to 60 values: the fewest chunks of one length (the last
+    # may be shorter) that is at least min(n_chunks, len), no longer than
+    # ceil(len/n_chunks), covering every value once, with matching slices.
+    for size in range(1, 61):
+        data = np.arange(float(size))
+        coord = {"data": data, "dims": ("x",), "attrs": {}}
+        counts = {-(-size // length) for length in range(1, size + 1)}
+        for n_chunks in range(1, size + 3):
+            pc = make_parallel_coord(coord=coord, n_chunks=n_chunks)
+            chunks = [pc["data_chunks"][k] for k in sorted(pc["data_chunks"])]
+            lengths = [len(chunk) for chunk in chunks]
+            assert len(chunks) == min(c for c in counts if c >= min(n_chunks, size))
+            assert set(lengths[:-1]) <= {lengths[0]} and lengths[-1] <= lengths[0]
+            assert lengths[0] <= -(-size // n_chunks)
+            np.testing.assert_array_equal(np.concatenate(chunks), data)
+            for k, chunk in pc["data_chunks"].items():
+                np.testing.assert_array_equal(data[pc["data_chunk_slices"][k]], chunk)
+
+
 def test_make_parallel_coord_gap():
     data = np.array([0.0, 1.0, 2.0, 100.0, 101.0, 102.0])
     coord = {"data": data, "dims": ("time",), "attrs": {"units": "s"}}
@@ -292,6 +334,30 @@ def test_interpolate_with_data_chunk_slices_present():
     # task_coords slice comes from data_chunk_slices.
     assert mapping[0]["task_coords"]["x"]["slice"] == pc["data_chunk_slices"][0]
     assert mapping[0]["data_selection"]["ds"]["x"].start == 0
+
+
+def test_interpolate_overlapping_chunks():
+    # Hand-built overlapping chunks, as in the graph building tutorial, select
+    # overlapping data.
+    data = np.arange(8.0)
+    parallel_coords = {
+        "x": {
+            "data": data,
+            "data_chunks": {0: data[0:4], 1: data[3:7], 2: data[4:8]},
+            "dims": ("x",),
+            "attrs": {"units": "m"},
+        }
+    }
+    mapping = interpolate_data_coords_onto_parallel_coords(
+        parallel_coords,
+        {"ds": _numeric_dataset("x", data)},
+        interpolation_method="nearest",
+    )
+    assert [mapping[k]["data_selection"]["ds"]["x"] for k in range(3)] == [
+        slice(0, 4),
+        slice(3, 7),
+        slice(4, 8),
+    ]
 
 
 def test_interpolate_non_nearest_linear():
