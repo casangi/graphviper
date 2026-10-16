@@ -50,6 +50,10 @@ def _node_task(input_params):
     return input_params["task_id"] * input_params["scale"]
 
 
+def _task_id(input_params):
+    return input_params["task_id"]
+
+
 def _reduce_sum(batch, input_params):
     return sum(batch)
 
@@ -96,6 +100,17 @@ def test_map_make_workflow(processing_set):
     graph.map(_node_task, parameters={"scale": 3}, make_workflow=True)
 
     assert dask.compute(*graph.graph) == (0, 3)
+
+
+def test_map_default_parameters(processing_set):
+    graph = Graph.from_dataset(processing_set)
+    graph.make_coordinates(["antenna_name"])
+    graph.build_node()
+
+    graph.map(_task_id, make_workflow=True)
+
+    assert dask.compute(*graph.graph) == (0, 1)
+    assert graph._nodes["_task_id"].parameters == {}
 
 
 def test_getitem_filter_and_reset(processing_set):

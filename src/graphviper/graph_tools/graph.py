@@ -96,15 +96,15 @@ class Graph:
     def map(self, function, parameters=None, connect=None, make_workflow=False):
         name = function.__name__
 
+        if parameters is None:
+            parameters = {}
+
         self._graph = graph_tools.map(
             input_data=self._dataset,
             node_task_data_mapping=self._node_mapping,
             node_task=function,
             input_params=parameters,
         )
-
-        if parameters is None:
-            parameters = {}
 
         if make_workflow:
             self._graph = generate_dask_workflow(self._graph)
