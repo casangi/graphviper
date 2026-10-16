@@ -1,6 +1,6 @@
 [project]
 name = "graphviper"
-version = "0.0.55"
+version = "0.0.56"
 description = "Visibility and Image Parallel Execution Reduction for Radio Astronomy "
 authors = [
     {name = "Jan-Willem Steeb", email="jsteeb@nrao.edu"},
@@ -17,8 +17,10 @@ dependencies = [
 
 
 [project.optional-dependencies]
-python_casacore = [
-    'python_casacore>=3.6.1; sys_platform != "darwin"'
+# casacore table access (Measurement Set v2 conversion) through XRADIO's arcae
+# backend, with wheels for Linux and macOS.
+casacore = [
+    'xradio[casacore]>=1.3.0'
 ]
 
 test = [
@@ -57,7 +59,7 @@ docs = [
 ]
 
 all = [
-    'python_casacore>=3.6.1; sys_platform != "darwin"',
+    'xradio[casacore]>=1.3.0',
     'pre-commit',
     'nbstripout',
     'pytest',
