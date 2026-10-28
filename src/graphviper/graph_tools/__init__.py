@@ -5,6 +5,7 @@ from graphviper.graph_tools.coordinate_utils import (
     make_frequency_coord,
     make_parallel_coord,
     make_time_coord,
+    map_to_nearest_coordinate,
 )
 from graphviper.graph_tools.generate_airflow_workflow import (
     airflow_dag_to_graphviz,
@@ -27,6 +28,7 @@ __all__ = [
     "make_parallel_coord",
     "make_time_coord",
     "map",
+    "map_to_nearest_coordinate",
     "processes_with_mpi",
     "reduce",
 ]

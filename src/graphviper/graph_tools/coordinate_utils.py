@@ -428,54 +428,103 @@ def _partition_ps_by_non_dimensions(ps, ps_partition_keys):
     return d
 
 
-def _nearest_interp_indices(
-    coord_values: np.ndarray,
-    query_values: np.ndarray,
-) -> np.ndarray:
-    """Fast replacement for ``scipy.interpolate.interp1d(..., kind='nearest',
-    bounds_error=False, fill_value=-1)`` that maps coordinate values to their
-    nearest integer indices.
+def map_to_nearest_coordinate(data_values, coordinate_values) -> np.ndarray:
+    """Map every data value onto its nearest coordinate value.
 
-    Uses ``np.searchsorted`` (pure C) instead of constructing a scipy
-    interpolator object, giving ~10-100x less overhead per call when
-    ``coord_values`` is already sorted (i.e. ``assume_sorted=True``).
+    Valid for any numeric coordinate (frequency, time, ...). A data value is
+    assigned to the coordinate value closest to it if it lies within the half
+    cell of that value on its side: half the gap to the neighbouring
+    coordinate value on that side, or, beyond either end of the coordinate
+    axis, half the gap between the two end values. A data value between two
+    coordinate values therefore always maps onto the nearer one (also on an
+    irregular axis), and only a data value beyond an end of the axis by more
+    than half the end gap maps onto none (``-1``). Several data values may map
+    onto one coordinate value (averaging onto a coarser axis); on an exact tie
+    the lower coordinate index wins.
+
+    This is the rule by which correlated data (visibilities or spectra) are
+    mapped onto image coordinates, e.g. data channels onto image channels:
+    :func:`interpolate_data_coords_onto_parallel_coords` selects the data of
+    each task with it (``interpolation_method="nearest"``), and the imaging
+    applications built on graphviper map with it, so a task never loses data
+    its image coordinates need. Data axes that are not copied from the
+    coordinate axis verbatim (execution blocks converted to LSRK, whose
+    channel centres differ by a few kHz, regridded or shifted axes) map
+    without loss.
 
     Parameters
     ----------
-    coord_values : np.ndarray
-        Sorted 1-D array of coordinate values (the "x" knots).
-    query_values : np.ndarray
-        Values to look up.
+    data_values : array-like
+        One-dimensional data coordinate values, e.g. visibility channel centre
+        frequencies (Hz) or integration times (s).
+    coordinate_values : array-like
+        One-dimensional coordinate values to map onto, e.g. image channel
+        centre frequencies. Need not be sorted.
 
     Returns
     -------
-    np.ndarray of int
-        Index of the nearest element in ``coord_values`` for each query, or
-        ``-1`` when the query is strictly outside the range of
-        ``coord_values``.
+    numpy.ndarray
+        Integer (``int64``) index into ``coordinate_values`` for each data
+        value, ``-1`` for a data value beyond an end of the coordinate axis by
+        more than half the end gap.
+
+    Raises
+    ------
+    ValueError
+        If either array is not one-dimensional, empty or not finite.
+
+    Notes
+    -----
+    A single coordinate value has no gap of its own: its half cell is then
+    half the widest gap of ``data_values``, and unbounded when the data hold a
+    single value too (a single data value mapped onto a single coordinate
+    value can only mean that value).
     """
-    n = len(coord_values)
-    query = np.asarray(query_values)
+    data_values = np.asarray(data_values, dtype=np.float64)
+    coordinate_values = np.asarray(coordinate_values, dtype=np.float64)
+    if data_values.ndim != 1 or coordinate_values.ndim != 1:
+        raise ValueError("Data and coordinate values must be one-dimensional.")
+    if data_values.size == 0 or coordinate_values.size == 0:
+        raise ValueError("Data and coordinate values must not be empty.")
+    if not (
+        np.all(np.isfinite(data_values)) and np.all(np.isfinite(coordinate_values))
+    ):
+        raise ValueError("Data and coordinate values must be finite.")
 
-    # Insertion points in the sorted coord array
-    right = np.searchsorted(coord_values, query, side="left")
-    left = right - 1
+    # Nearest coordinate by a sorted lookup (O(n log m), no n x m distance
+    # matrix); on a tie the lower original index, as numpy.argmin gives.
+    order = np.argsort(coordinate_values, kind="stable")
+    sorted_values = coordinate_values[order]
+    n = sorted_values.size
+    right = np.clip(np.searchsorted(sorted_values, data_values, side="left"), 0, n - 1)
+    left = np.clip(right - 1, 0, n - 1)
+    left_distance = np.abs(sorted_values[left] - data_values)
+    right_distance = np.abs(sorted_values[right] - data_values)
+    take_left = (left_distance < right_distance) | (
+        (left_distance == right_distance) & (order[left] <= order[right])
+    )
+    position = np.where(take_left, left, right)
+    distance = np.where(take_left, left_distance, right_distance)
 
-    # Clamp for safe distance comparison (out-of-range cases handled below)
-    rc = np.clip(right, 0, n - 1)
-    lc = np.clip(left, 0, n - 1)
+    # Half cell on the data value's side of its nearest coordinate value; the
+    # end gap continues beyond either end of the axis.
+    if n > 1:
+        gaps = np.diff(sorted_values)
+        above = data_values >= sorted_values[position]
+        side_gap = np.where(
+            above,
+            gaps[np.minimum(position, n - 2)],
+            gaps[np.maximum(position - 1, 0)],
+        )
+        tolerance = 0.5 * side_gap
+    elif data_values.size > 1:
+        tolerance = 0.5 * np.diff(np.sort(data_values)).max()
+    else:
+        tolerance = np.inf
 
-    right_dist = np.abs(coord_values[rc] - query)
-    left_dist = np.abs(coord_values[lc] - query)
-
-    # Prefer the left neighbour on an exact tie (consistent with floor behaviour)
-    interp_index = np.where(left_dist <= right_dist, lc, rc).astype(int)
-
-    # Apply fill_value=-1 for strictly out-of-bounds queries
-    out_of_bounds = (query < coord_values[0]) | (query > coord_values[-1])
-    interp_index[out_of_bounds] = -1
-
-    return interp_index
+    nearest = order[position].astype(np.int64)
+    nearest[distance > tolerance] = -1
+    return nearest
 
 
 def interpolate_data_coords_onto_parallel_coords(
@@ -506,7 +555,7 @@ def interpolate_data_coords_onto_parallel_coords(
     input_data : Union[Dict, ProcessingSet]
         Can either be a `ProcessingSet <https://github.com/casangi/xradio/blob/main/src/xradio/correlated_data/processing_set.py>`_ or a Dictionary of `xarray.Datasets <https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html>`_. Only coordinates are needed so no actual data is loaded into memory.
     interpolation_method :  {"linear", "nearest", "nearest-up", "zero", "slinear", "quadratic", "cubic", "previous", "next",}, optional
-        The kind of interpolation method to use as described in `Scipy documentation <https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interp1d.html>`_ , by default ``nearest``.
+        The kind of interpolation method to use as described in `Scipy documentation <https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interp1d.html>`_ , by default ``nearest``. With ``nearest`` every numeric data sample (frequency, time, ...) belongs to its nearest parallel coordinate value within half a coordinate gap (:func:`map_to_nearest_coordinate`), and a chunk selects the samples whose parallel coordinate value lies in its [first, last] range, so samples slightly offset from the parallel coordinate (execution blocks converted to LSRK) are kept at the ends of the axis as everywhere else.
     assume_sorted : bool, optional
         Are the data in parallel_coords and input_data monotonically increasing in value, by default True.
     ps_partition : An optional list of strings ('spectral_window_name' and/or 'field_name' are currently supported); if non-empty, the function will use the meta-data of each Dataset to partition the parallel sets by these pseudo-dimensions as well as the actual Dataset dimensions specified.
@@ -630,17 +679,40 @@ def interpolate_data_coords_onto_parallel_coords(
             coord_da = input_data[xds_name][dim]
             coord_values = coord_da.values
 
-            if coord_values.dtype.kind in ("U", "S", "O"):
+            is_string = coord_values.dtype.kind in ("U", "S", "O")
+            if interpolation_method == "nearest" and not is_string:
+                # Every sample belongs to its nearest parallel coordinate value
+                # within half a coordinate gap (map_to_nearest_coordinate,
+                # the rule the imaging applications grid with); a chunk selects
+                # the samples whose parallel coordinate value lies in its
+                # [first, last] range.
+                parallel_values = np.asarray(pc["data"], dtype=np.float64)
+                nearest = map_to_nearest_coordinate(coord_values, parallel_values)
+                mapped_values = np.where(
+                    nearest >= 0, parallel_values[np.maximum(nearest, 0)], np.nan
+                )
+                chunk_indx_start_stop = {}
+                for i, chunk_index in enumerate(sorted_chunk_keys):
+                    low, high = sorted((edges[2 * i], edges[2 * i + 1]))
+                    selected = np.flatnonzero(
+                        (mapped_values >= low) & (mapped_values <= high)
+                    )
+                    chunk_indx_start_stop[chunk_index] = (
+                        slice(int(selected[0]), int(selected[-1]) + 1)
+                        if selected.size
+                        else slice(None)
+                    )
+                xds_data_selection.setdefault(xds_name, {})[dim] = chunk_indx_start_stop
+                continue
+
+            if is_string:
                 # String coordinates: exact matching only
                 string_to_idx = {val: i for i, val in enumerate(coord_values)}
                 interp_index = np.array(
                     [string_to_idx.get(val, -1) for val in edges]
                 ).astype(int)
-            elif interpolation_method == "nearest":
-                # Fast path: no interpolator object construction
-                interp_index = _nearest_interp_indices(coord_values, edges)
             else:
-                # Fallback for non-nearest methods
+                # Non-nearest methods
                 interpolator = interp1d(
                     coord_values,
                     np.arange(len(coord_values)),

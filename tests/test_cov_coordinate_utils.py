@@ -17,6 +17,7 @@ from graphviper.graph_tools.coordinate_utils import (
     make_parallel_coord,
     make_parallel_coord_by_gap,
     make_time_coord,
+    map_to_nearest_coordinate,
 )
 
 
@@ -246,8 +247,10 @@ def _numeric_dataset(coord_name, values):
     return xr.Dataset(coords={coord_name: (coord_name, np.asarray(values))})
 
 
-def test_interpolate_numeric_nearest_all_boundary_branches():
-    # Data spans 10..19.
+@pytest.mark.parametrize("interpolation_method", ["nearest", "linear"])
+def test_interpolate_numeric_all_boundary_branches(interpolation_method):
+    # Data spans 10..19. "nearest" selects by map_to_nearest_coordinate,
+    # "linear" by the edge interpolation; both give the same selections here.
     ds = _numeric_dataset("x", np.arange(10.0, 20.0))
     input_data = {"ds": ds}
 
@@ -277,7 +280,7 @@ def test_interpolate_numeric_nearest_all_boundary_branches():
     }
 
     mapping = interpolate_data_coords_onto_parallel_coords(
-        parallel_coords, input_data, interpolation_method="nearest"
+        parallel_coords, input_data, interpolation_method=interpolation_method
     )
     # data_chunks_edges was computed and cached on the parallel_coord.
     assert "data_chunks_edges" in parallel_coords["x"]
@@ -319,6 +322,141 @@ def test_interpolate_end_edge_beyond_range_keeps_last_sample():
     assert sel == slice(5, 10)
     picked = ds.x.isel(x=sel).values
     np.testing.assert_array_equal(picked, np.arange(5.0, 10.0))
+
+
+# ---------------------------------------------------------------------------
+# map_to_nearest_coordinate
+# ---------------------------------------------------------------------------
+def test_map_to_nearest_coordinate_offset_execution_blocks():
+    # Channel centres of an execution block converted to LSRK, a few kHz from
+    # the image channels (488 kHz apart), map onto them at both ends too.
+    image = 231.6224e9 + 488.28e3 * np.arange(4)
+    for offset in (-4856.1, -739.7, 1709.5, 2968.8):
+        np.testing.assert_array_equal(
+            map_to_nearest_coordinate(image + offset, image), [0, 1, 2, 3]
+        )
+
+
+def test_map_to_nearest_coordinate_half_cell_beyond_the_ends():
+    coordinate = np.array([10.0, 20.0, 30.0])
+    # Within half the end gap (5) beyond either end -> the end value; farther
+    # -> -1. Exactly half a gap still maps.
+    data = np.array([4.9, 5.0, 14.0, 26.0, 35.0, 35.1])
+    np.testing.assert_array_equal(
+        map_to_nearest_coordinate(data, coordinate), [-1, 0, 0, 2, 2, -1]
+    )
+
+
+def test_map_to_nearest_coordinate_irregular_axis_keeps_interior_values():
+    # Gaps of 1 and 9 (e.g. time chunks split at a scan gap): a value between
+    # two coordinate values always maps onto the nearer one, whatever the
+    # neighbouring gaps.
+    coordinate = np.array([0.0, 1.0, 10.0])
+    data = np.array([0.4, 4.0, 5.6, 9.0, 14.5, 14.6])
+    np.testing.assert_array_equal(
+        map_to_nearest_coordinate(data, coordinate), [0, 1, 2, 2, 2, -1]
+    )
+
+
+def test_map_to_nearest_coordinate_time_values():
+    # Unix times: integrations offset by a fraction of the 60 s parallel
+    # spacing map onto their nearest parallel time.
+    parallel = make_time_coord(
+        time_start="2020-01-01T00:00:00.000", time_delta=60, n_samples=3
+    )["data"]
+    np.testing.assert_array_equal(
+        map_to_nearest_coordinate(parallel + 7.5, parallel), [0, 1, 2]
+    )
+
+
+def test_map_to_nearest_coordinate_unsorted_and_ties():
+    coordinate = np.array([30.0, 10.0, 20.0])
+    np.testing.assert_array_equal(
+        map_to_nearest_coordinate([11.0, 29.0, 19.0], coordinate), [1, 0, 2]
+    )
+    # A value halfway between two coordinate values -> the lower index.
+    np.testing.assert_array_equal(map_to_nearest_coordinate([15.0], [10.0, 20.0]), [0])
+    np.testing.assert_array_equal(map_to_nearest_coordinate([15.0], [20.0, 10.0]), [0])
+
+
+def test_map_to_nearest_coordinate_single_coordinate_value():
+    # One coordinate value: half the widest data gap; one data value too:
+    # unbounded.
+    np.testing.assert_array_equal(
+        map_to_nearest_coordinate([1.0, 2.0, 4.0], [5.0]), [-1, -1, 0]
+    )
+    np.testing.assert_array_equal(map_to_nearest_coordinate([1.0e12], [5.0]), [0])
+
+
+@pytest.mark.parametrize(
+    "data, coordinate",
+    [
+        (np.zeros((2, 2)), [1.0]),
+        ([], [1.0]),
+        ([1.0], [np.nan]),
+    ],
+    ids=["two_dimensional", "empty", "not_finite"],
+)
+def test_map_to_nearest_coordinate_refuses_invalid_input(data, coordinate):
+    with pytest.raises(ValueError):
+        map_to_nearest_coordinate(data, coordinate)
+
+
+@pytest.mark.parametrize("offset", [5.0e3, -5.0e3])
+def test_interpolate_offset_datasets_keep_their_end_channels(offset):
+    # Regression: two execution blocks, the second with channel centres
+    # ``offset`` Hz from the parallel coordinate, one channel per chunk. Each
+    # end chunk used to lose the second block (its end edge lay just outside
+    # that block's range and mapped to -1); every chunk now selects both.
+    channels = np.array([3.0e9, 3.4e9, 3.8e9])
+    coord = {"data": channels, "dims": ("frequency",), "attrs": {"units": "Hz"}}
+    parallel_coords = {"frequency": make_parallel_coord(coord=coord, n_chunks=3)}
+    input_data = {
+        "eb0": _numeric_dataset("frequency", channels),
+        "eb1": _numeric_dataset("frequency", channels + offset),
+    }
+    mapping = interpolate_data_coords_onto_parallel_coords(
+        parallel_coords, input_data, interpolation_method="nearest"
+    )
+    for task_id in range(3):
+        selection = mapping[task_id]["data_selection"]
+        assert sorted(selection) == ["eb0", "eb1"]
+        for name in ("eb0", "eb1"):
+            assert selection[name]["frequency"] == slice(task_id, task_id + 1)
+
+
+def test_interpolate_single_parallel_value_keeps_offset_datasets():
+    # One image channel on the last data channel of six execution blocks,
+    # whose channel centres lie up to ~5 kHz lower: all six are selected.
+    channels = 231.6224e9 + 488.28e3 * np.arange(4)
+    offsets = [0.0, -1709.5, -2968.8, -739.7, -4856.1, -3913.9]
+    input_data = {
+        f"eb{i}": _numeric_dataset("frequency", channels + offset)
+        for i, offset in enumerate(offsets)
+    }
+    coord = {"data": channels[3:], "dims": ("frequency",), "attrs": {"units": "Hz"}}
+    parallel_coords = {"frequency": make_parallel_coord(coord=coord, n_chunks=1)}
+    mapping = interpolate_data_coords_onto_parallel_coords(
+        parallel_coords, input_data, interpolation_method="nearest"
+    )
+    selection = mapping[0]["data_selection"]
+    assert sorted(selection) == sorted(input_data)
+    for name in input_data:
+        assert selection[name]["frequency"] == slice(3, 4)
+
+
+def test_interpolate_offset_time_samples_keep_their_end_chunks():
+    # The same rule for time: integrations 10 s after each 60 s parallel time.
+    times = make_time_coord(
+        time_start="2020-01-01T00:00:00.000", time_delta=60, n_samples=4
+    )
+    parallel_coords = {"time": make_parallel_coord(coord=times, n_chunks=2)}
+    input_data = {"ds": _numeric_dataset("time", times["data"] + 10.0)}
+    mapping = interpolate_data_coords_onto_parallel_coords(
+        parallel_coords, input_data, interpolation_method="nearest"
+    )
+    assert mapping[0]["data_selection"]["ds"]["time"] == slice(0, 2)
+    assert mapping[1]["data_selection"]["ds"]["time"] == slice(2, 4)
 
 
 def test_interpolate_with_data_chunk_slices_present():
