@@ -4,6 +4,9 @@ No network, no dask cluster, no real measurement sets: synthetic
 xarray/numpy/mocks only.
 """
 
+from functools import partial
+
+import dask
 import dask.array as da
 import numpy as np
 import pytest
@@ -655,3 +658,223 @@ def test_get_disk_chunk_sizes_missing_dim_warns():
     result = get_disk_chunk_sizes({"ds0": ds}, {"nonexistent_dim": {}})
     # Dimension not found in any dataset -> skipped, empty result.
     assert result == {}
+
+
+# ---------------------------------------------------------------------------
+# Axis order: a numeric axis must be monotonic, in either direction
+# ---------------------------------------------------------------------------
+# Not splines in scipy, so repeated data values and a single sample are allowed.
+NON_SPLINE_METHODS = ["nearest", "nearest-up", "linear", "previous", "next"]
+INTERPOLATION_METHODS = [*NON_SPLINE_METHODS, "zero", "slinear", "quadratic", "cubic"]
+AXES = {
+    "uniform": 100.0 + 10.0 * np.arange(20),
+    "irregular": 100.0 + np.cumsum(1.0 + (np.arange(20) * 7 % 11)),
+    "gap": np.concatenate([100.0 + 10.0 * np.arange(10), 500.0 + 10.0 * np.arange(10)]),
+}
+SPLIT_AXIS = pytest.mark.parametrize(
+    "split",
+    [
+        partial(make_parallel_coord, n_chunks=2),
+        partial(make_parallel_coord, gap=5.0),
+        partial(make_parallel_coord_by_gap, gap=5.0),
+    ],
+    ids=["n_chunks", "gap", "by_gap"],
+)
+
+
+def _selected_samples(chunks, data, method):
+    """The sorted samples of data that each chunk selects, in chunk order."""
+    parallel_coords = {
+        "x": {
+            "data": np.concatenate(list(chunks.values())),
+            "data_chunks": chunks,
+            "dims": ("x",),
+            "attrs": {},
+        }
+    }
+    mapping = interpolate_data_coords_onto_parallel_coords(
+        parallel_coords,
+        {"ds": _numeric_dataset("x", data)},
+        interpolation_method=method,
+    )
+    return [
+        sorted(data[task["data_selection"]["ds"]["x"]])
+        if task["data_selection"]
+        else []
+        for task in mapping.values()
+    ]
+
+
+@SPLIT_AXIS
+@pytest.mark.parametrize(
+    "values", [[1.0, 3.0, 2.0], [1.0, np.nan, 2.0]], ids=["unsorted", "nan"]
+)
+def test_make_parallel_coord_rejects_non_monotonic_axis(split, values):
+    coord = {"data": np.array(values), "dims": ("x",), "attrs": {}}
+    with pytest.raises(ValueError, match="is not monotonic"):
+        split(coord)
+
+
+@SPLIT_AXIS
+@pytest.mark.parametrize(
+    "values",
+    [[1.0, 1.0, 2.0], [2.0, 1.0, 1.0], [1.0]],
+    ids=["repeat_up", "repeat_down", "single"],
+)
+def test_make_parallel_coord_accepts_repeats_and_single_value(split, values):
+    coord = {"data": np.array(values), "dims": ("x",), "attrs": {}}
+    chunks = split(coord)["data_chunks"]
+    np.testing.assert_array_equal(np.concatenate(list(chunks.values())), values)
+
+
+@pytest.mark.parametrize("split", [make_parallel_coord, make_parallel_coord_by_gap])
+def test_make_parallel_coord_gap_splits_decreasing_axis(split):
+    data = np.array([102.0, 101.0, 100.0, 2.0, 1.0, 0.0])
+    coord = {"data": data, "dims": ("x",), "attrs": {}}
+    chunks = split(coord=coord, gap=10.0)["data_chunks"]
+    assert len(chunks) == 2
+    np.testing.assert_array_equal(np.concatenate(list(chunks.values())), data)
+
+
+@pytest.mark.parametrize("method", INTERPOLATION_METHODS)
+@pytest.mark.parametrize(
+    "data",
+    [[10.0, 12.0, 11.0, 13.0], [10.0, np.nan, 12.0, 13.0]],
+    ids=["unsorted", "nan"],
+)
+def test_interpolate_rejects_non_monotonic_data_axis(method, data):
+    coord = {"data": np.arange(10.0, 14.0), "dims": ("x",), "attrs": {}}
+    parallel_coords = {"x": make_parallel_coord(coord=coord, n_chunks=2)}
+    with pytest.raises(ValueError, match="Coordinate 'x' of 'ms_0' is not monotonic"):
+        interpolate_data_coords_onto_parallel_coords(
+            parallel_coords,
+            {"ms_0": _numeric_dataset("x", data)},
+            interpolation_method=method,
+        )
+
+
+def test_interpolate_rejects_non_monotonic_parallel_coord():
+    data = np.array([10.0, 30.0, 20.0, 40.0])
+    parallel_coords = {
+        "x": {
+            "data": data,
+            "data_chunks": {0: data[:2], 1: data[2:]},
+            "dims": ("x",),
+            "attrs": {},
+        }
+    }
+    with pytest.raises(ValueError, match="Parallel coordinate 'x' is not monotonic"):
+        interpolate_data_coords_onto_parallel_coords(
+            parallel_coords, {"ds": _numeric_dataset("x", np.arange(10.0, 50.0))}
+        )
+
+
+def test_interpolate_string_axis_is_not_checked():
+    names = np.array(["DV03", "DA41", "PM01", "DV01"])
+    coord = {"data": names, "dims": ("antenna_name",), "attrs": {}}
+    parallel_coords = {"antenna_name": make_parallel_coord(coord=coord, n_chunks=2)}
+    ds = xr.Dataset(coords={"antenna_name": ("antenna_name", names)})
+    mapping = interpolate_data_coords_onto_parallel_coords(parallel_coords, {"ds": ds})
+    assert mapping[1]["data_selection"]["ds"]["antenna_name"] == slice(2, 4)
+
+
+@pytest.mark.parametrize("method", NON_SPLINE_METHODS)
+@pytest.mark.parametrize("order", [1, -1], ids=["up", "down"])
+def test_interpolate_accepts_repeated_values(method, order):
+    axis = np.array([1.0, 2.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0])[::order]
+    coord = {"data": axis, "dims": ("x",), "attrs": {}}
+    parallel_coords = {"x": make_parallel_coord(coord=coord, n_chunks=2)}
+    mapping = interpolate_data_coords_onto_parallel_coords(
+        parallel_coords,
+        {"ds": _numeric_dataset("x", axis)},
+        interpolation_method=method,
+    )
+    assert [mapping[k]["data_selection"]["ds"]["x"] for k in range(2)] == [
+        slice(0, 4),
+        slice(4, 8),
+    ]
+
+
+@pytest.mark.parametrize("method", NON_SPLINE_METHODS)
+def test_interpolate_single_channel(method):
+    channel = np.array([5.0])
+    coord = {"data": channel, "dims": ("x",), "attrs": {}}
+    parallel_coords = {"x": make_parallel_coord(coord=coord, n_chunks=1)}
+    mapping = interpolate_data_coords_onto_parallel_coords(
+        parallel_coords,
+        {"ds": _numeric_dataset("x", channel)},
+        interpolation_method=method,
+    )
+    assert mapping[0]["data_selection"]["ds"]["x"] == slice(0, 1)
+
+
+@pytest.mark.parametrize("axis", AXES.values(), ids=AXES.keys())
+@pytest.mark.parametrize("method", INTERPOLATION_METHODS)
+@pytest.mark.parametrize(
+    "step, offset",
+    [(1, 0.0), (1, 1.0), (1, -1.0), (3, 0.0)],
+    ids=["same_grid", "beyond_top", "beyond_bottom", "coarser"],
+)
+@pytest.mark.parametrize(
+    "data_order, parallel_order",
+    [(-1, 1), (1, -1), (-1, -1)],
+    ids=["data_down", "parallel_down", "both_down"],
+)
+def test_interpolate_selects_the_same_samples_on_a_reversed_axis(
+    axis, method, step, offset, data_order, parallel_order
+):
+    parallel = axis[::step] + offset
+    half = parallel.size // 2
+    chunks = [parallel[:half], parallel[half:]]
+    reversed_chunks = [chunk[::parallel_order] for chunk in chunks[::parallel_order]]
+    expected = _selected_samples(dict(enumerate(chunks)), axis, method)
+    selected = _selected_samples(
+        dict(enumerate(reversed_chunks)), axis[::data_order], method
+    )
+    assert all(expected)
+    assert selected[::parallel_order] == expected
+
+
+@pytest.mark.parametrize("method", INTERPOLATION_METHODS)
+def test_interpolate_chunks_beyond_a_decreasing_axis(method):
+    # One chunk spans the data, the other lies below it.
+    data = np.arange(19.0, 9.0, -1.0)
+    chunks = {0: np.array([25.0, 5.0]), 1: np.array([2.0, 0.0])}
+    assert _selected_samples(chunks, data, method) == [sorted(data), []]
+
+
+@pytest.mark.parametrize("method", ["quadratic", "cubic"])
+def test_interpolate_spline_overshoot_on_a_decreasing_axis(method):
+    # A spline index beyond the axis must not wrap round to the other end.
+    data = np.array([103.0, 102.0, 101.0, 100.0, 4.0, 3.0, 2.0, 1.0, 0.0])
+    chunks = {0: np.array([0.0, 24.6]), 1: np.array([25.6, 103.0])}
+    parallel_coords = {
+        "x": {
+            "data": np.concatenate(list(chunks.values())),
+            "data_chunks": chunks,
+            "dims": ("x",),
+            "attrs": {},
+        }
+    }
+    mapping = interpolate_data_coords_onto_parallel_coords(
+        parallel_coords,
+        {"ds": _numeric_dataset("x", data)},
+        interpolation_method=method,
+    )
+    selections = [task["data_selection"]["ds"]["x"] for task in mapping.values()]
+    assert all(sel.start >= 0 and sel.stop >= 0 for sel in selections)
+
+
+def test_interpolate_check_loads_no_data():
+    def no_compute(*args, **kwargs):
+        raise AssertionError("dask compute")
+
+    ds = _dask_var_ds(2, n_freq=8).isel(frequency=slice(None, None, -1))
+    with dask.config.set(scheduler=no_compute):
+        parallel_coords = {
+            "frequency": make_parallel_coord(coord=ds.frequency, n_chunks=2)
+        }
+        mapping = interpolate_data_coords_onto_parallel_coords(
+            parallel_coords, {"ds": ds}
+        )
+    assert mapping[0]["data_selection"]["ds"]["frequency"] == slice(0, 4)

@@ -1,3 +1,6 @@
+import pytest
+
+
 def delete_files(filepaths=None):
     import os
     import shutil
@@ -355,6 +358,67 @@ def test_load_layer_generate_dask_workflow():
     # Each task k covers 2 consecutive channels 2k and 2k+1 → sum = 4k+1
     expected_total = sum(range(n_freq))  # 0+1+...+11 = 66
     assert abs(sum(results) - expected_total) < 1e-10
+
+
+@pytest.mark.parametrize("interpolation_method", ["nearest", "linear"])
+def test_load_layer_generate_dask_workflow_decreasing_axis(interpolation_method):
+    """test_load_layer_generate_dask_workflow on a decreasing frequency axis: every
+    map task gets the channels of its parallel coordinate chunk."""
+    import dask
+    import numpy as np
+    import xarray as xr
+
+    from graphviper.graph_tools.coordinate_utils import (
+        interpolate_data_coords_onto_parallel_coords,
+        make_parallel_coord,
+    )
+    from graphviper.graph_tools.generate_dask_workflow import generate_dask_workflow
+    from graphviper.graph_tools.map import map as viper_map
+
+    # Synthetic dataset: vis[i] = frequency[i] for frequency 11..0
+    n_freq = 12
+    freq_vals = np.arange(n_freq - 1.0, -1.0, -1.0)
+    xds = xr.Dataset(
+        {"vis": (["frequency"], freq_vals.copy())},
+        coords={"frequency": freq_vals},
+    )
+    input_data = {"xds_0": xds}
+
+    # 6 map tasks of 2 channels each; disk chunk = 4 channels → 3 load nodes
+    n_map_chunks = 6
+    parallel_coords = {
+        "frequency": make_parallel_coord(coord=xds.frequency, n_chunks=n_map_chunks)
+    }
+    node_task_data_mapping = interpolate_data_coords_onto_parallel_coords(
+        parallel_coords, input_data, interpolation_method=interpolation_method
+    )
+
+    def my_task(input_params):
+        ps = input_params["input_data"]
+        assert ps is not None, "Expected pre-loaded data from load layer"
+        return ps["xds_0"]["vis"].values.tolist()
+
+    def my_load_fn(load_params):
+        sel = load_params["data_selection"]["xds_0"]
+        return {"xds_0": input_data["xds_0"].isel(sel).load()}
+
+    graph = viper_map(
+        input_data=input_data,
+        node_task_data_mapping=node_task_data_mapping,
+        node_task=my_task,
+        input_params={"input_data_store": "synthetic"},
+        in_memory_compute=False,
+        data_loading_task=my_load_fn,
+        disk_chunk_sizes={"frequency": 4},
+    )
+
+    assert len(graph["load"]["input_params"]) == 3  # 12 channels / 4 per chunk
+    assert graph["map"]["load_node_ids"] == [0, 0, 1, 1, 2, 2]
+
+    results = dask.compute(generate_dask_workflow(graph))[0]
+
+    # Task k covers channels 2k and 2k+1, at frequencies 11-2k and 10-2k
+    assert results == [[11.0 - 2 * k, 10.0 - 2 * k] for k in range(n_map_chunks)]
 
 
 if __name__ == "__main__":
