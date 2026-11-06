@@ -148,6 +148,11 @@ def make_parallel_coord(
     Dict :
         Parallel coordinate dictionary. See :ref:`notes <parallel coord>` for structure of dictionary.
 
+    Raises
+    ------
+    ValueError
+        If a numeric coordinate is not monotonic. It can increase or decrease.
+
     Notes
     -----
     .. _parallel coord:
@@ -194,6 +199,7 @@ def make_parallel_coord(
             data="array"
         )  # Deep copy so that we don't accidentally modify the xr.core.dataarray.DataArray.
 
+    _check_monotonic(coord["data"], f"Coordinate {coord['dims']}")
     parallel_coord = {}
     parallel_coord["data"] = coord["data"]
     if gap is None and n_chunks is not None:
@@ -210,7 +216,7 @@ def make_parallel_coord(
             raise ValueError("Can only split one-dimensional array")
         nx = len(coord_data)
         dxs = coord_data[1:] - coord_data[:-1]
-        jumps0 = np.argwhere(dxs > gap).flatten()
+        jumps0 = np.argwhere(np.abs(dxs) > gap).flatten()
         jumps = [0] + list(jumps0) + [nx]
         data_chunk_edges = []
         data_chunks = {}
@@ -241,7 +247,7 @@ def make_parallel_coord_by_gap(coord: dict | xr.DataArray, gap: float) -> dict:
     coord : Union[Dict, xr.DataArray]
         The input `measures dictionary <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_ or `xarray.DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_ with `measures attributes <https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/edit#gid=1504318014>`_.
     gap : float
-      The coordinate will be split into chunks where successive values (which are assumed to be monotonically increasing) are more than `gap` apart.
+      The coordinate will be split into chunks where successive values (which must be monotonic) are more than `gap` apart.
     """
     if isinstance(coord, xr.core.dataarray.DataArray):
         coord = coord.copy(deep=True).to_dict()
@@ -249,10 +255,11 @@ def make_parallel_coord_by_gap(coord: dict | xr.DataArray, gap: float) -> dict:
     coord_data = np.array(coord["data"])
     if len(coord_data.shape) > 1:
         raise ValueError
+    _check_monotonic(coord_data, f"Coordinate {coord['dims']}")
 
     nx = len(coord_data)
     dxs = coord_data[1:] - coord_data[:-1]
-    jumps0 = np.argwhere(dxs > gap).flatten()
+    jumps0 = np.argwhere(np.abs(dxs) > gap).flatten()
     jumps = [0] + list(jumps0) + [nx]
     data_chunk_edges = []
     data_chunks = {}
@@ -266,6 +273,15 @@ def make_parallel_coord_by_gap(coord: dict | xr.DataArray, gap: float) -> dict:
         parallel_coord["dims"] = coord["dims"]
         parallel_coord["attrs"] = coord["attrs"]
     return parallel_coord
+
+
+def _check_monotonic(values: list | np.ndarray, name: str) -> None:
+    """Raises a ValueError unless a numeric one-dimensional axis is monotonic, in either direction."""
+    values = np.asarray(values)
+    if values.dtype.kind in ("U", "S", "O") or values.ndim != 1:
+        return
+    if not (np.all(values[1:] >= values[:-1]) or np.all(values[1:] <= values[:-1])):
+        raise ValueError(f"{name} is not monotonic.")
 
 
 def _array_split(data: list | np.ndarray, n_chunks: int):
@@ -557,12 +573,17 @@ def interpolate_data_coords_onto_parallel_coords(
     interpolation_method :  {"linear", "nearest", "nearest-up", "zero", "slinear", "quadratic", "cubic", "previous", "next",}, optional
         The kind of interpolation method to use as described in `Scipy documentation <https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interp1d.html>`_ , by default ``nearest``. With ``nearest`` every numeric data sample (frequency, time, ...) belongs to its nearest parallel coordinate value within half a coordinate gap (:func:`map_to_nearest_coordinate`), and a chunk selects the samples whose parallel coordinate value lies in its [first, last] range, so samples slightly offset from the parallel coordinate (execution blocks converted to LSRK) are kept at the ends of the axis as everywhere else.
     assume_sorted : bool, optional
-        Are the data in parallel_coords and input_data monotonically increasing in value, by default True.
+        Has no effect, by default True: every numeric coordinate must be monotonic, in either direction.
     ps_partition : An optional list of strings ('spectral_window_name' and/or 'field_name' are currently supported); if non-empty, the function will use the meta-data of each Dataset to partition the parallel sets by these pseudo-dimensions as well as the actual Dataset dimensions specified.
     Returns
     -------
     Dict :
          Node task data mapping dictionary. See :ref:`notes <node task data mapping>` for structure of dictionary.
+
+    Raises
+    ------
+    ValueError
+        If a numeric coordinate of parallel_coords or input_data is not monotonic. It can increase or decrease.
 
     Notes
     -----
@@ -667,6 +688,7 @@ def interpolate_data_coords_onto_parallel_coords(
     # here, so repeating the work n_partitions times was wasteful.
     # -----------------------------------------------------------------------
     for dim, pc in parallel_coords.items():
+        _check_monotonic(pc["data"], f"Parallel coordinate {dim!r}")
         # Pre-compute once per dim (not once per (partition, xds_name, dim))
         if "data_chunks_edges" not in pc:
             pc["data_chunks_edges"] = _array_split_edges(pc["data_chunks"])
@@ -678,6 +700,7 @@ def interpolate_data_coords_onto_parallel_coords(
             # and eliminates per-chunk xarray element indexing later.
             coord_da = input_data[xds_name][dim]
             coord_values = coord_da.values
+            _check_monotonic(coord_values, f"Coordinate {dim!r} of {xds_name!r}")
 
             is_string = coord_values.dtype.kind in ("U", "S", "O")
             if interpolation_method == "nearest" and not is_string:
@@ -705,6 +728,7 @@ def interpolate_data_coords_onto_parallel_coords(
                 xds_data_selection.setdefault(xds_name, {})[dim] = chunk_indx_start_stop
                 continue
 
+            chunk_edges = edges
             if is_string:
                 # String coordinates: exact matching only
                 string_to_idx = {val: i for i, val in enumerate(coord_values)}
@@ -712,7 +736,12 @@ def interpolate_data_coords_onto_parallel_coords(
                     [string_to_idx.get(val, -1) for val in edges]
                 ).astype(int)
             else:
-                # Non-nearest methods
+                # Non-nearest methods, which need an increasing axis and each
+                # chunk as (low, high)
+                chunk_edges = np.sort(edges.reshape(-1, 2), axis=1).ravel()
+                descending = coord_values[0] > coord_values[-1]
+                if descending:
+                    coord_values = coord_values[::-1]
                 interpolator = interp1d(
                     coord_values,
                     np.arange(len(coord_values)),
@@ -721,7 +750,15 @@ def interpolate_data_coords_onto_parallel_coords(
                     fill_value=-1,
                     assume_sorted=assume_sorted,
                 )
-                interp_index = interpolator(edges).astype(int)
+                interp_index = interpolator(chunk_edges).astype(int)
+                if descending:
+                    # Positions on the decreasing axis, each chunk (start, stop)
+                    interp_index = np.where(
+                        interp_index == -1,
+                        -1,
+                        np.maximum(len(coord_values) - 1 - interp_index, 0),
+                    )
+                    interp_index = interp_index.reshape(-1, 2)[:, ::-1].ravel()
 
             # Cached boundary values — avoids per-chunk xarray element indexing
             coord_min = coord_values[0]
@@ -732,7 +769,7 @@ def interpolate_data_coords_onto_parallel_coords(
             for chunk_index in sorted_chunk_keys:
                 if interp_index[i] == -1 and interp_index[i + 1] == -1:
                     chunk_indx_start_stop[chunk_index] = slice(None)
-                    if edges[i] < coord_min and edges[i + 1] > coord_max:
+                    if chunk_edges[i] < coord_min and chunk_edges[i + 1] > coord_max:
                         # Chunk spans the entire coordinate range.
                         interp_index[i] = 0
                         interp_index[i + 1] = len(coord_values) - 1
