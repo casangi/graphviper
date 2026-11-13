@@ -428,8 +428,125 @@ def test_monitor_node_task_short_task_gets_final_sample():
 
     out = monitor_node_task(lambda p: {"ok": 1}, 60.0)({})
     # initial sample + the final sample taken on stop, despite interval >> runtime
-    assert len(out["resource_usage"]["time_seconds"]) >= 1
+    assert len(out["resource_usage"]["time_seconds"]) == 2
     assert out["ok"] == 1
+
+
+def test_cpu_percent_over_sample_intervals():
+    from graphviper.graph_tools.map import _cpu_percent
+
+    assert _cpu_percent([0.0, 1.0, 2.0, 2.5], [0.0, 0.5, 1.5, 2.0]) == [
+        50.0,
+        50.0,
+        100.0,
+        100.0,
+    ]
+    assert _cpu_percent([0.0], [3.0]) == [0.0]
+
+
+def test_monitor_node_task_first_sample_before_task():
+    import time
+
+    from graphviper.graph_tools.map import monitor_node_task
+
+    seen = {}
+
+    def node(input_params):
+        seen["start"] = time.time()
+        time.sleep(0.25)
+        return {}
+
+    usage = monitor_node_task(node, 0.05)({})["resource_usage"]
+    assert usage["time_seconds"][0] < 0.01
+    assert usage["start_unixtime"] <= seen["start"]
+    assert usage["cpu_percent"][0] == usage["cpu_percent"][1]
+    assert usage["cpu_seconds"] == sorted(usage["cpu_seconds"])
+
+
+def test_monitor_node_task_cpu_percent_with_10ms_cpu_time(monkeypatch):
+    """With CPU time in 10 ms ticks (psutil on Linux) no sample may divide a
+    tick by a near-zero interval (the first sample used to reach ~15,000 %)."""
+    import math
+    import time
+
+    from graphviper.graph_tools.map import monitor_node_task
+
+    real_process_time = time.process_time
+    monkeypatch.setattr(
+        time, "process_time", lambda: math.floor(real_process_time() * 100) / 100
+    )
+
+    def busy(input_params):
+        end = time.monotonic() + 0.5
+        while time.monotonic() < end:
+            pass
+        return {}
+
+    usage = monitor_node_task(busy, 0.1)({})["resource_usage"]
+    assert max(usage["cpu_percent"]) < 150
+
+
+def test_sampler_final_sample_replaces_a_close_previous_one():
+    import threading
+    import time
+
+    from graphviper.graph_tools.map import _sample_process_resources
+
+    samples = {
+        k: []
+        for k in (
+            "time_seconds",
+            "cpu_seconds",
+            "memory_rss_bytes",
+            "read_bytes",
+            "write_bytes",
+            "read_chars",
+            "write_chars",
+        )
+    }
+    stop, ready = threading.Event(), threading.Event()
+    sampler = threading.Thread(
+        target=_sample_process_resources, args=(0.2, stop, samples, ready, {})
+    )
+    sampler.start()
+    deadline = time.monotonic() + 5
+    while len(samples["memory_rss_bytes"]) < 3 and time.monotonic() < deadline:
+        time.sleep(0.001)  # until the sample at ~0.4 s
+    stop.set()  # the final sample comes ~1 ms later and replaces it
+    sampler.join(timeout=5)
+    t = samples["time_seconds"]
+    assert len(t) == 3 and t[-1] - t[-2] >= 0.1
+    assert {len(v) for v in samples.values() if v} == {3}
+
+
+def test_monitor_node_task_io_counters_fail_mid_series(monkeypatch):
+    """io_counters failing after two samples drops the I/O series, so the
+    returned series stay the same length."""
+    import time
+
+    import psutil
+
+    from graphviper.graph_tools.map import monitor_node_task
+
+    calls = []
+
+    def probe_and_two_samples(self):
+        calls.append(1)
+        if len(calls) > 3:
+            raise OSError("counters vanished")
+        return type("io", (), {"read_bytes": 0, "write_bytes": 0})()
+
+    monkeypatch.setattr(
+        psutil.Process, "io_counters", probe_and_two_samples, raising=False
+    )
+
+    def node(input_params):
+        time.sleep(0.2)
+        return {}
+
+    usage = monitor_node_task(node, 0.02)({})["resource_usage"]
+    assert "read_bytes" not in usage
+    assert len({len(v) for v in usage.values() if isinstance(v, list)}) == 1
 
 
 def test_monitor_node_task_non_dict_passthrough():
@@ -565,6 +682,27 @@ def test_map_monitor_resources_off_by_default():
     assert "resource_usage" not in graph["map"]["node_task"](
         graph["map"]["input_params"][0]
     )
+
+
+def test_map_monitor_resources_rejects_negative():
+    node_task_data_mapping = {
+        0: {
+            "chunk_indices": (0,),
+            "parallel_dims": ["frequency"],
+            "data_selection": {"xds_0": {"frequency": slice(0, 3)}},
+            "task_coords": {},
+        },
+    }
+    with pytest.raises(ValueError, match="monitor_resources_seconds"):
+        viper_map(
+            input_data={"xds_0": _make_xds(3)},
+            node_task_data_mapping=node_task_data_mapping,
+            node_task=lambda input_params: {},
+            input_params={},
+            in_memory_compute=True,
+            client=None,
+            monitor_resources_seconds=-1,
+        )
 
 
 # --------------------------------------------------------------------------- #

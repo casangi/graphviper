@@ -410,7 +410,7 @@ def make_graph_node_task(node_task: Callable) -> Callable:
     return wrap
 
 
-def _sample_process_resources(interval, stop_event, samples):
+def _sample_process_resources(interval, stop_event, samples, ready, anchor):
     """Sampler-thread body: append one sample per ``interval`` to ``samples``.
 
     Runs inside the worker process. Counters are PER PROCESS (psutil.Process()),
@@ -418,47 +418,85 @@ def _sample_process_resources(interval, stop_event, samples):
     one task at a time (Dask threads_per_worker=1, or MPI ranks); with several
     concurrent task threads the series describes the whole process.
 
+    The first sample (``time_seconds`` 0) is taken before ``ready`` is set,
+    so before the task starts, and ``anchor["start_unixtime"]`` is its
+    wall-clock time. CPU use is sampled as the cumulative CPU seconds of the
+    process (``cpu_seconds``, :func:`time.process_time`: all threads, no
+    ``/proc`` read, unlike psutil's 10 ms ticks on Linux), from which
+    :func:`_cpu_percent` derives rates.
+
     A final sample is taken after the stop event fires so even tasks shorter
-    than ``interval`` get at least one point.
+    than ``interval`` get at least one interval. If it comes less than half
+    an interval after the previous sample, it replaces that sample (never the
+    first): a rate over a sub-millisecond interval (the stop often follows a
+    sample delayed by the task's GIL-holding final ``gc.collect``) is noise.
     """
     import time
 
     import psutil
 
-    proc = psutil.Process()
-    proc.cpu_percent(None)  # establish the CPU% baseline (first call returns 0)
-    # Probe I/O counter availability once (Linux/Windows only -- hence the
-    # getattr; *_chars are the Linux syscall-level counters, which -- unlike
-    # *_bytes, which only count block-device traffic -- include network
-    # filesystems such as Lustre).
-    io_counters = getattr(proc, "io_counters", None)
+    io_keys = ("read_bytes", "write_bytes", "read_chars", "write_chars")
     try:
-        io0 = io_counters() if io_counters is not None else None
-        has_io = io0 is not None
-        has_chars = hasattr(io0, "read_chars")
-    except Exception:
-        has_io = has_chars = False
+        proc = psutil.Process()
+        # Probe I/O counter availability once (Linux/Windows only -- hence the
+        # getattr; *_chars exist on Linux only).
+        io_counters = getattr(proc, "io_counters", None)
+        try:
+            io0 = io_counters() if io_counters is not None else None
+            has_io = io0 is not None
+            has_chars = hasattr(io0, "read_chars")
+        except Exception:
+            has_io = has_chars = False
 
-    t0 = time.monotonic()
-    stopping = False
-    while True:
-        samples["time_seconds"].append(time.monotonic() - t0)
-        samples["cpu_percent"].append(proc.cpu_percent(None))
-        samples["memory_rss_bytes"].append(proc.memory_info().rss)
-        if has_io:
-            try:
-                io = io_counters()
-                samples["read_bytes"].append(io.read_bytes)
-                samples["write_bytes"].append(io.write_bytes)
-                if has_chars:
-                    samples["read_chars"].append(io.read_chars)
-                    samples["write_chars"].append(io.write_chars)
-            except Exception:  # keep the series rectangular if counters vanish
-                has_io = False
-        if stopping:
-            return
-        # wait() returns True when the task finished -> take one last sample.
-        stopping = stop_event.wait(interval)
+        t0 = time.monotonic()
+        anchor["start_unixtime"] = time.time()
+        stopping = False
+        while True:
+            t = time.monotonic() - t0
+            if (
+                stopping
+                and len(samples["time_seconds"]) > 1
+                and t - samples["time_seconds"][-1] < 0.5 * interval
+            ):
+                for series in samples.values():
+                    if series:
+                        series.pop()
+            samples["time_seconds"].append(t)
+            samples["cpu_seconds"].append(time.process_time())
+            samples["memory_rss_bytes"].append(proc.memory_info().rss)
+            if has_io:
+                try:
+                    io = io_counters()
+                    samples["read_bytes"].append(io.read_bytes)
+                    samples["write_bytes"].append(io.write_bytes)
+                    if has_chars:
+                        samples["read_chars"].append(io.read_chars)
+                        samples["write_chars"].append(io.write_chars)
+                except Exception:
+                    # Drop the I/O series rather than return them shorter
+                    # than time_seconds.
+                    has_io = False
+                    for key in io_keys:
+                        samples[key].clear()
+            ready.set()
+            if stopping:
+                return
+            # wait() returns True when the task finished -> take one last sample.
+            stopping = stop_event.wait(interval)
+    finally:
+        ready.set()
+
+
+def _cpu_percent(time_seconds, cpu_seconds):
+    """CPU % of the process over each sample's interval ``(t[k-1], t[k]]``,
+    from the cumulative CPU seconds. Sample 0 has no interval and takes
+    sample 1's value."""
+    pct = []
+    for k in range(1, len(time_seconds)):
+        dt = time_seconds[k] - time_seconds[k - 1]
+        dc = cpu_seconds[k] - cpu_seconds[k - 1]
+        pct.append(100.0 * dc / dt if dt > 0 else 0.0)
+    return pct[:1] + pct if pct else [0.0] * len(time_seconds)
 
 
 def monitor_node_task(node_task, interval):
@@ -467,25 +505,39 @@ def monitor_node_task(node_task, interval):
     series is attached to the task's return dict as ``"resource_usage"``:
 
         {"sample_interval_seconds": interval,
-         "start_unixtime": <time.time() when sampling began>,
-         "time_seconds": [...], "cpu_percent": [...],
+         "start_unixtime": <time.time() of the first sample>,
+         "time_seconds": [...],
+         "cpu_seconds": [...],                           # cumulative user + system
+         "cpu_percent": [...],                           # over (t[k-1], t[k]]
          "memory_rss_bytes": [...],
          # POSIX only: getrusage page-fault deltas over the task
          "minor_page_faults": int, "major_page_faults": int,
-         # present when the platform exposes them:
-         "read_bytes": [...], "write_bytes": [...],      # block-level, cumulative
-         "read_chars": [...], "write_chars": [...]}      # syscall-level, cumulative
-                                                          # (includes Lustre/NFS)
+         # present when the platform exposes them, cumulative:
+         "read_bytes": [...], "write_bytes": [...],      # reached the storage layer
+         "read_chars": [...], "write_chars": [...]}      # read/write syscalls
 
     Plain lists of numbers -- stdlib-pickle-serialisable, so the MPI backend's
     worker->manager result path is safe. Tasks that do not return a dict pass
     through unchanged (a debug line notes the dropped series). If psutil is
     not installed the task runs unmonitored after a one-line warning.
 
-    ``cpu_percent`` covers ALL threads of the process (OpenMP included) and can
-    exceed 100. See :func:`_sample_process_resources` for the per-process
-    attribution caveat.
+    The first sample is taken just before the task starts. ``cpu_seconds``
+    and ``cpu_percent`` cover ALL threads of the process (OpenMP included);
+    ``cpu_percent`` can exceed 100. ``cpu_percent[k]`` is the average over
+    the interval ending at sample k (sample 0 repeats sample 1), so rates
+    over any other window come from differences of ``cpu_seconds``. On Linux
+    ``*_chars`` count bytes passed to read/write-family system calls (page
+    cache hits included) and ``*_bytes`` the bytes read from or written to
+    the storage layer; both count Lustre traffic on a Lustre client. See
+    :func:`_sample_process_resources` for the per-process attribution caveat.
     """
+    if not (
+        isinstance(interval, (int, float)) and math.isfinite(interval) and interval > 0
+    ):
+        raise ValueError(
+            "monitor_resources_seconds must be a finite number > 0 (None or 0 "
+            f"turns monitoring off), got {interval!r}"
+        )
 
     @functools.wraps(node_task)
     def monitored(input_params):
@@ -503,7 +555,7 @@ def monitor_node_task(node_task, interval):
 
         samples = {
             "time_seconds": [],
-            "cpu_percent": [],
+            "cpu_seconds": [],
             "memory_rss_bytes": [],
             "read_bytes": [],
             "write_bytes": [],
@@ -511,9 +563,11 @@ def monitor_node_task(node_task, interval):
             "write_chars": [],
         }
         stop_event = threading.Event()
+        ready = threading.Event()
+        anchor = {}
         sampler = threading.Thread(
             target=_sample_process_resources,
-            args=(interval, stop_event, samples),
+            args=(interval, stop_event, samples, ready, anchor),
             name="graphviper-resource-sampler",
             daemon=True,
         )
@@ -533,9 +587,11 @@ def monitor_node_task(node_task, interval):
         # Wall-clock anchor for the relative time_seconds series: lets an
         # analysis place every task on the run's common timeline (cluster-wide
         # usage at time t). Cross-node comparability relies on NTP-synced node
-        # clocks -- fine at typical sampling intervals.
+        # clocks -- fine at typical sampling intervals. The sampler records it
+        # with its first sample; this one is the fallback if it never did.
         start_unixtime = time.time()
         sampler.start()
+        ready.wait(timeout=max(5.0, 2 * interval))
         try:
             return_dict = node_task(input_params)
         finally:
@@ -553,9 +609,16 @@ def monitor_node_task(node_task, interval):
                 )
 
         if isinstance(return_dict, dict):
-            usage = {k: v for k, v in samples.items() if v}
+            # Copies cut to a common length: a sampler that outlived its join
+            # timeout may still append to its lists.
+            n = min((len(v) for v in samples.values() if v), default=0)
+            usage = {k: v[:n] for k, v in samples.items() if v}
+            if "cpu_seconds" in usage:
+                usage["cpu_percent"] = _cpu_percent(
+                    usage["time_seconds"], usage["cpu_seconds"]
+                )
             usage["sample_interval_seconds"] = interval
-            usage["start_unixtime"] = start_unixtime
+            usage["start_unixtime"] = anchor.get("start_unixtime", start_unixtime)
             if _resource is not None:
                 ru1 = _resource.getrusage(_resource.RUSAGE_SELF)
                 usage["minor_page_faults"] = ru1.ru_minflt - ru0.ru_minflt
