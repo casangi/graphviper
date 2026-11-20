@@ -128,6 +128,16 @@ def generate_dask_workflow(viper_graph):
             return dask.annotate(priority=task_priorities[i])
         return contextlib.nullcontext()
 
+    def _node_context(input_params):
+        # Local cache: graph_tools.map names the node whose disk holds the
+        # task's cache (``node_ip``) and toolviper gives every worker its node's
+        # IP as a resource, so the resource restriction keeps the task on that
+        # node.
+        node_ip = input_params.get("node_ip")
+        if node_ip is None:
+            return contextlib.nullcontext()
+        return dask.annotate(resources={node_ip: 1})
+
     if "load" in viper_graph:
         # ------------------------------------------------------------------
         # Build load nodes — one dask.delayed per unique disk-chunk group.
@@ -181,7 +191,7 @@ def generate_dask_workflow(viper_graph):
             delayed_params = dask.delayed(input_params)
             if load_node_id == -1:
                 # No load node for this task — fall back to per-task loading.
-                with _priority_context(i):
+                with _priority_context(i), _node_context(input_params):
                     dask_graph.append(dask.delayed(map_fn)(delayed_params))
             else:
                 load_node = load_nodes[load_node_id]
@@ -193,6 +203,7 @@ def generate_dask_workflow(viper_graph):
                 group_task_counter[load_node_id] += 1
                 with (
                     _priority_context(i),
+                    _node_context(input_params),
                     dask.annotate(
                         viper_load_group=load_node_id, viper_map_pair=pair_id
                     ),
@@ -203,7 +214,7 @@ def generate_dask_workflow(viper_graph):
                     dask_graph.append(dask.delayed(map_fn)(task_input))
     else:
         for i, input_params in enumerate(viper_graph["map"]["input_params"]):
-            with _priority_context(i):
+            with _priority_context(i), _node_context(input_params):
                 dask_graph.append(
                     dask.delayed(viper_graph["map"]["node_task"])(
                         dask.delayed(input_params)

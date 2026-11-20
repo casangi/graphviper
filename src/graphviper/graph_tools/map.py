@@ -738,6 +738,9 @@ def map(
 
         - date_time
         - viper_local_dir
+        - node_ip
+
+    ``node_ip`` is the IP of the node whose local disk holds the task's cache. The Dask backend runs the task on a worker of that node.
 
     Example of how to access data in ``node_task``::
 
@@ -800,8 +803,6 @@ def map(
             input_params["viper_local_dir"] = viper_local_dir
             node_ip = nodes_ip_list[tasks_to_node_map[task_id]]
             input_params["node_ip"] = node_ip
-            # with dask.annotate(resources={node_ip: 1}):
-            #    graph_list.append(dask.delayed(node_task)(dask.delayed(input_params)))
         else:
             input_params["date_time"] = None
         input_param_list.append(copy.deepcopy(input_params))
