@@ -44,13 +44,18 @@ def _make_xds(n_freq=6):
 
 
 class _FakeClient:
-    """Stand-in for a Dask distributed client exposing scheduler_info()."""
+    """Stand-in for a Dask distributed client exposing scheduler_info(), which
+    reports five workers unless asked for all, as distributed 2026.3 to 2026.6
+    do."""
 
     def __init__(self, workers_info):
         self._workers_info = workers_info
 
-    def scheduler_info(self):
-        return {"workers": self._workers_info}
+    def scheduler_info(self, n_workers=5):
+        workers = list(self._workers_info.items())
+        if n_workers >= 0:
+            workers = workers[:n_workers]
+        return {"workers": dict(workers)}
 
 
 def _workers_info(ips):
@@ -230,6 +235,19 @@ def test_local_cache_configuration_padding(monkeypatch, tmp_path):
     )
     assert len(tasks_to_node_map) == 7
     np.testing.assert_array_equal(tasks_to_node_map, [0, 0, 1, 1, 2, 2, 2])
+
+
+def test_local_cache_configuration_sees_every_worker(monkeypatch, tmp_path):
+    """With more than five workers every node still gets its share of tasks."""
+    monkeypatch.setenv("VIPER_LOCAL_DIR", str(tmp_path))
+    ips = [f"10.0.0.{node}" for node in range(1, 5) for _ in range(2)]
+    client = _FakeClient(_workers_info(ips))
+
+    _, _, _, tasks_to_node_map, nodes_ip_list = _local_cache_configuration(
+        n_tasks=8, client=client, date_time="x" * 12
+    )
+    assert nodes_ip_list == ["10.0.0.1", "10.0.0.2", "10.0.0.3", "10.0.0.4"]
+    np.testing.assert_array_equal(tasks_to_node_map, [0, 0, 1, 1, 2, 2, 3, 3])
 
 
 # --------------------------------------------------------------------------- #
