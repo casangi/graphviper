@@ -301,6 +301,68 @@ def test_generate_dask_workflow_priority_annotations_load_graph():
     assert results[1] == 1.0
 
 
+# --------------------------------------------------------------------------- #
+# local cache: node_ip -> a ``resources`` annotation that keeps a task on its node
+# --------------------------------------------------------------------------- #
+def _node_resources(node):
+    """The dask ``resources`` annotation on a delayed node's own layers, else None."""
+    for layer in node.__dask_graph__().layers.values():
+        if layer.annotations and "resources" in layer.annotations:
+            return layer.annotations["resources"]
+    return None
+
+
+def test_generate_dask_workflow_node_ip_restricts_the_task_to_its_node():
+    """A map task that carries a ``node_ip`` (local cache) is annotated with that
+    node's resource; a task without one is not."""
+    graph = _map_v_graph([1, 2])
+    graph["map"]["input_params"][0]["node_ip"] = "10.0.0.1"
+
+    nodes = generate_dask_workflow(graph)
+    assert [_node_resources(n) for n in nodes] == [{"10.0.0.1": 1}, None]
+    assert list(dask.compute(nodes)[0]) == [1, 2]
+
+
+def test_generate_dask_workflow_node_ip_load_graph():
+    """The node restriction is set on both load-graph paths, next to the
+    priority and the ``viper_load_group``/``viper_map_pair`` annotations."""
+    full = _make_full_xds()
+
+    def load_fn(load_params):
+        return {"xds_0": full}
+
+    def map_fn(input_params):
+        return input_params["tag"]
+
+    viper_graph = {
+        "load": {"node_task": load_fn, "input_params": [{"marker": "load0"}]},
+        "map": {
+            "node_task": map_fn,
+            "input_params": [
+                {"input_data": None, "tag": "boundary", "node_ip": "10.0.0.1"},
+                {"tag": "in_chunk", "node_ip": "10.0.0.2"},
+            ],
+            "load_node_ids": [-1, 0],
+            "relative_data_selections": [
+                None,
+                {"xds_0": {"frequency": slice(0, 2)}},
+            ],
+            "task_priorities": [-1, -7],
+        },
+    }
+
+    nodes = generate_dask_workflow(viper_graph)
+    assert [_node_resources(n) for n in nodes] == [{"10.0.0.1": 1}, {"10.0.0.2": 1}]
+    assert [_node_priority(n) for n in nodes] == [-1, -7]
+    in_chunk = [
+        layer.annotations
+        for layer in nodes[1].__dask_graph__().layers.values()
+        if layer.annotations and "viper_map_pair" in layer.annotations
+    ]
+    assert in_chunk and all(a["resources"] == {"10.0.0.2": 1} for a in in_chunk)
+    assert list(dask.compute(nodes)[0]) == ["boundary", "in_chunk"]
+
+
 def test_generate_dask_workflow_load_node_inherits_max_task_priority():
     """A load node inherits the HIGHEST priority of the map tasks it feeds, so
     unannotated loads (default 0) cannot all outrank negatively-prioritized map
