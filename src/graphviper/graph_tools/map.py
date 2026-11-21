@@ -985,7 +985,8 @@ def _local_cache_configuration(n_tasks, client, date_time):
         nodes_ip_list = None
         return local_cache, viper_local_dir, date_time, tasks_to_node_map, nodes_ip_list
 
-    workers_info = client.scheduler_info()["workers"]
+    # distributed 2026.3 to 2026.6 report five workers unless asked for all
+    workers_info = client.scheduler_info(n_workers=-1)["workers"]
     nodes_ip_list = _get_unique_resource_ip(workers_info)
     n_nodes = len(nodes_ip_list)
 
